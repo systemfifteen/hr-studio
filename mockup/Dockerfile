@@ -1,2 +1,2 @@
 FROM nginx:alpine
-COPY hearthrate_mockup.html /usr/share/nginx/html/index.html
+COPY mockup/hearthrate_mockup.html /usr/share/nginx/html/index.html
