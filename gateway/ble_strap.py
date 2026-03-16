@@ -1,0 +1,138 @@
+import asyncio
+import logging
+import time
+from datetime import datetime
+
+from bleak import BleakClient, BleakError
+
+from hr_utils import calc_zone, calc_calories
+
+logger = logging.getLogger(__name__)
+
+HEART_RATE_UUID  = "00002a37-0000-1000-8000-00805f9b34fb"
+RECONNECT_DELAY  = 5    # sekúnd medzi pokusmi o reconnect
+CONNECT_TIMEOUT  = 15.0
+
+
+class BleStrap:
+    """
+    Jeden BLE hrudný pás = jeden asyncio Task.
+    Automaticky sa reconnectuje pri výpadku.
+    """
+
+    def __init__(
+        self,
+        ble_address: str,
+        bike_position: int,
+        rider_name: str,
+        max_hr: int,
+        weight_kg: float | None,
+        birth_year: int | None,
+        gender: str | None,
+        broadcast_fn,
+    ):
+        self.ble_address   = ble_address
+        self.bike_position = bike_position
+        self.rider_name    = rider_name
+        self.max_hr        = max_hr
+        self.weight_kg     = weight_kg
+        self.birth_year    = birth_year
+        self.gender        = gender
+        self.broadcast_fn  = broadcast_fn
+
+        self.connected      = False
+        self.last_seen      = 0.0
+        self.last_hr        = 0
+        self.total_calories = 0.0
+        self._running       = True
+        self._task: asyncio.Task | None = None
+
+    def start(self):
+        self._task = asyncio.create_task(
+            self._connect_loop(),
+            name=f"strap-{self.bike_position}",
+        )
+
+    async def stop(self):
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    # ─── Hlavná slučka ────────────────────────────────────────────────────────
+
+    async def _connect_loop(self):
+        while self._running:
+            try:
+                logger.info(
+                    f"Pripájam {self.ble_address} → "
+                    f"pozícia {self.bike_position} ({self.rider_name})"
+                )
+                async with BleakClient(
+                    self.ble_address,
+                    timeout=CONNECT_TIMEOUT,
+                ) as client:
+                    await client.start_notify(HEART_RATE_UUID, self._on_hr_data)
+                    logger.info(f"BLE spojené: {self.rider_name} ({self.ble_address})")
+
+                    while client.is_connected and self._running:
+                        await asyncio.sleep(1)
+
+            except (BleakError, asyncio.TimeoutError) as e:
+                logger.debug(f"BLE chyba [{self.ble_address}]: {e}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Neočakávaná BLE chyba [{self.ble_address}]: {e}")
+
+            if self.connected:
+                self.connected = False
+                asyncio.create_task(self.broadcast_fn({
+                    "type":     "disconnected",
+                    "position": self.bike_position,
+                    "name":     self.rider_name,
+                }))
+                logger.warning(f"Pás odpojený — {self.rider_name}")
+
+            if self._running:
+                await asyncio.sleep(RECONNECT_DELAY)
+
+    # ─── GATT HR notification callback ────────────────────────────────────────
+
+    def _on_hr_data(self, _sender, data: bytearray):
+        # GATT 0x2A37 Heart Rate Measurement
+        # Byte 0: flags, bit0 = HR format (0=uint8, 1=uint16)
+        flags = data[0]
+        hr    = int.from_bytes(data[1:3], "little") if (flags & 0x01) else data[1]
+
+        now  = time.time()
+        zone = calc_zone(hr, self.max_hr)
+        pct  = round(hr / self.max_hr * 100)
+
+        if self.connected and self.weight_kg and self.birth_year:
+            age         = datetime.now().year - self.birth_year
+            elapsed_min = (now - self.last_seen) / 60
+            self.total_calories += calc_calories(
+                hr, self.weight_kg,
+                age=age,
+                gender=self.gender or "M",
+                duration_min=elapsed_min,
+            )
+
+        self.connected = True
+        self.last_seen = now
+        self.last_hr   = hr
+
+        asyncio.create_task(self.broadcast_fn({
+            "type":     "hr_update",
+            "position": self.bike_position,
+            "name":     self.rider_name,
+            "hr":       hr,
+            "pct":      pct,
+            "zone":     zone,
+            "calories": round(self.total_calories),
+            "max_hr":   self.max_hr,
+        }))

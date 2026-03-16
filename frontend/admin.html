@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR Studio — Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif;font-size:14px}
+a{color:#e03060;text-decoration:none}
+
+/* ── Layout ── */
+#wrap{max-width:960px;margin:0 auto;padding:20px 16px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #222}
+header h1{font-size:20px;font-weight:700;letter-spacing:.5px}
+header h1 span{color:#e03060}
+header a{font-size:13px;color:#888}
+header a:hover{color:#ccc}
+
+/* ── Status bar ── */
+#statusbar{background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;margin-bottom:20px;display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.sitem{display:flex;flex-direction:column;gap:2px}
+.sitem .slabel{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.sitem .sval{font-size:13px;font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;text-transform:uppercase}
+.badge.ok{background:#1a4a28;color:#4caf78}
+.badge.err{background:#4a1a1a;color:#e06060}
+.badge.warn{background:#3a3010;color:#c8a020}
+
+/* ── Buttons ── */
+.btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:background .15s}
+.btn-primary{background:#e03060;color:#fff}.btn-primary:hover{background:#c8254f}
+.btn-secondary{background:#222;color:#ccc;border:1px solid #333}.btn-secondary:hover{background:#2a2a2a}
+.btn-danger{background:#3a1010;color:#e06060;border:1px solid #5a2020}.btn-danger:hover{background:#4a1818}
+.btn-small{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* ── Sections ── */
+section{margin-bottom:28px}
+section h2{font-size:15px;font-weight:700;color:#ccc;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+section h2 .badge{font-size:11px}
+
+/* ── Table ── */
+.tbl{width:100%;border-collapse:collapse;background:#141414;border-radius:8px;overflow:hidden;border:1px solid #222}
+.tbl th{background:#1c1c1c;color:#888;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid #222}
+.tbl td{padding:10px 12px;border-bottom:1px solid #1a1a1a;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#181818}
+.ble-addr{font-family:monospace;font-size:12px;color:#7ecfff}
+.pos-badge{display:inline-block;background:#222;border:1px solid #333;border-radius:4px;padding:2px 8px;font-weight:700;font-size:13px;min-width:32px;text-align:center}
+.connected-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.dot-on{background:#4caf78}.dot-off{background:#555}
+
+/* ── Forms ── */
+.form-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.form-row label{color:#888;font-size:12px;min-width:80px}
+input[type=text],input[type=number],select{background:#1c1c1c;border:1px solid #333;color:#e0e0e0;padding:7px 10px;border-radius:6px;font-size:13px;outline:none}
+input:focus,select:focus{border-color:#e03060}
+input[type=text]{width:220px}
+input[type=number]{width:80px}
+
+/* ── Scan results ── */
+#scan-list{display:grid;gap:8px;margin-top:12px}
+.scan-card{background:#161616;border:1px solid #252525;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:border-color .15s}
+.scan-card:hover{border-color:#e03060}
+.scan-card.selected{border-color:#e03060;background:#1e0a10}
+.scan-card .dev-name{font-weight:700;font-size:14px}
+.scan-card .dev-addr{font-family:monospace;font-size:12px;color:#7ecfff;margin-top:2px}
+.scan-card .dev-rssi{font-size:12px;color:#888}
+.scan-signal{width:36px;text-align:center}
+.rssi-bar{display:flex;gap:2px;align-items:flex-end;height:16px}
+.rssi-bar span{width:5px;background:#333;border-radius:1px}
+.rssi-bar span.active{background:#4caf78}
+
+/* ── Modal ── */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100}
+#modal-overlay.open{display:flex}
+#modal{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:24px;width:380px;max-width:95vw}
+#modal h3{font-size:16px;margin-bottom:16px}
+#modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:24px;right:24px;background:#222;border:1px solid #333;color:#e0e0e0;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}
+#toast.show{opacity:1}
+#toast.success{border-color:#4caf78;color:#4caf78}
+#toast.error{border-color:#e06060;color:#e06060}
+
+.empty{color:#555;font-style:italic;padding:16px 12px}
+#scan-spinner{display:none;align-items:center;gap:10px;color:#888;font-size:13px}
+#scan-spinner.active{display:flex}
+.spinner{width:18px;height:18px;border:2px solid #333;border-top-color:#e03060;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="wrap">
+
+  <header>
+    <h1>HR Studio <span>Admin</span></h1>
+    <a href="/">← Dashboard</a>
+  </header>
+
+  <!-- Status bar -->
+  <div id="statusbar">
+    <div class="sitem">
+      <span class="slabel">Sync stav</span>
+      <span class="sval" id="s-sync-status"><span class="badge warn">—</span></span>
+    </div>
+    <div class="sitem">
+      <span class="slabel">Posledný sync</span>
+      <span class="sval" id="s-last-sync">—</span>
+    </div>
+    <div class="sitem">
+      <span class="slabel">Riders v cache</span>
+      <span class="sval" id="s-cache-count">—</span>
+    </div>
+    <div class="sitem" style="margin-left:auto">
+      <button class="btn btn-secondary" id="btn-sync" onclick="doSync()">↻ Sync teraz</button>
+    </div>
+  </div>
+
+  <!-- Bikes & straps -->
+  <section>
+    <h2>Bicykle a BLE pásy <span class="badge warn" id="bikes-count">0</span></h2>
+    <table class="tbl" id="bikes-table">
+      <thead>
+        <tr>
+          <th>Pos.</th>
+          <th>Label</th>
+          <th>BLE adresa pásu</th>
+          <th>Stav</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="bikes-tbody">
+        <tr><td colspan="5" class="empty">Načítavam...</td></tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:12px">
+      <button class="btn btn-secondary" onclick="showAddBike()">+ Pridať bicykel</button>
+    </div>
+  </section>
+
+  <!-- BLE scanner -->
+  <section>
+    <h2>BLE skener — nájdi pásy</h2>
+    <div class="form-row">
+      <button class="btn btn-primary" id="btn-scan" onclick="doScan()">⦿ Spustiť scan (10s)</button>
+      <div id="scan-spinner"><div class="spinner"></div> Skenujem BLE zariadenia...</div>
+    </div>
+    <div id="scan-list"></div>
+    <div id="assign-row" style="display:none;margin-top:14px">
+      <div class="form-row">
+        <label>Priradiť k bicyklu:</label>
+        <select id="assign-bike-select"></select>
+        <button class="btn btn-primary" onclick="doAssign()">Priradiť</button>
+        <button class="btn btn-secondary" onclick="cancelAssign()">Zrušiť</button>
+      </div>
+      <div id="assign-info" style="font-size:12px;color:#888;margin-top:4px"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Modal: pridaj bicykel -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3 id="modal-title">Pridať bicykel</h3>
+    <div class="form-row">
+      <label>Pozícia</label>
+      <input type="number" id="m-position" min="1" max="30" placeholder="1–30">
+    </div>
+    <div class="form-row">
+      <label>Label</label>
+      <input type="text" id="m-label" placeholder="napr. Bike 1">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Zrušiť</button>
+      <button class="btn btn-primary" onclick="saveModal()">Uložiť</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api';
+let bikes = [];
+let selectedDevice = null;
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 3000);
+}
+
+// ── Status ─────────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const r = await fetch(`${API}/status`);
+    const d = await r.json();
+    const ok = d.last_sync_ok > 0;
+    document.getElementById('s-sync-status').innerHTML =
+      `<span class="badge ${ok ? 'ok' : 'err'}">${ok ? 'OK' : 'Chyba'}</span>`;
+    document.getElementById('s-last-sync').textContent =
+      d.last_sync_ok ? new Date(d.last_sync_ok * 1000).toLocaleTimeString('sk-SK') : '—';
+    document.getElementById('s-cache-count').textContent = d.cache_count ?? '—';
+  } catch(e) {
+    document.getElementById('s-sync-status').innerHTML = '<span class="badge err">Offline</span>';
+  }
+}
+
+async function doSync() {
+  const btn = document.getElementById('btn-sync');
+  btn.disabled = true;
+  btn.textContent = '↻ Syncujem...';
+  try {
+    await fetch(`${API}/sync`, { method: 'POST' });
+    toast('Sync spustený', 'success');
+    setTimeout(loadStatus, 2000);
+  } catch(e) {
+    toast('Sync zlyhalo', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Sync teraz';
+  }
+}
+
+// ── Bikes ──────────────────────────────────────────────────────────────────
+async function loadBikes() {
+  try {
+    const r = await fetch(`${API}/bikes`);
+    bikes = await r.json();
+    renderBikes();
+  } catch(e) {
+    document.getElementById('bikes-tbody').innerHTML =
+      '<tr><td colspan="5" class="empty">Chyba načítania</td></tr>';
+  }
+}
+
+function renderBikes() {
+  document.getElementById('bikes-count').textContent = bikes.length;
+  const tbody = document.getElementById('bikes-tbody');
+  if (!bikes.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Žiadne bicykle — klikni "Pridať bicykel"</td></tr>';
+    return;
+  }
+  tbody.innerHTML = bikes.map(b => `
+    <tr>
+      <td><span class="pos-badge">${b.position}</span></td>
+      <td>${b.label}</td>
+      <td>${b.strap
+        ? `<span class="ble-addr">${b.strap.ble_address}</span>`
+        : '<span style="color:#444">—</span>'}</td>
+      <td><span class="connected-dot dot-off"></span><span style="color:#555;font-size:12px">offline</span></td>
+      <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end">
+        ${b.strap
+          ? `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '${b.strap.ble_address}')">Zmeniť pás</button>
+             <button class="btn btn-danger btn-small" onclick="removeStrap(${b.id})">✕</button>`
+          : `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '')">+ Priradiť pás</button>`}
+        <button class="btn btn-danger btn-small" onclick="deleteBike(${b.id}, ${b.position})">Zmazať</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function deleteBike(id, pos) {
+  if (!confirm(`Zmazať bicykel #${pos}?`)) return;
+  await fetch(`${API}/bikes/${id}`, { method: 'DELETE' });
+  toast('Bicykel zmazaný');
+  loadBikes();
+}
+
+async function removeStrap(bikeId) {
+  await fetch(`${API}/bikes/${bikeId}/strap`, { method: 'DELETE' });
+  toast('Pás odpojený');
+  loadBikes();
+}
+
+// ── Add bike modal ─────────────────────────────────────────────────────────
+function showAddBike() {
+  document.getElementById('m-position').value = '';
+  document.getElementById('m-label').value = '';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+async function saveModal() {
+  const pos = parseInt(document.getElementById('m-position').value);
+  const lbl = document.getElementById('m-label').value.trim();
+  if (!pos || pos < 1 || pos > 30) { toast('Zadaj platnú pozíciu (1–30)', 'error'); return; }
+  const r = await fetch(`${API}/bikes`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ position: pos, label: lbl || `Bike ${pos}` }),
+  });
+  if (r.ok) { toast('Bicykel pridaný', 'success'); closeModal(); loadBikes(); }
+  else if (r.status === 409) toast('Táto pozícia už existuje', 'error');
+  else toast('Chyba', 'error');
+}
+
+// ── Inline strap edit (quick assign by typing address) ─────────────────────
+function editStrap(bikeId, current) {
+  const addr = prompt('BLE adresa pásu (napr. D4:AC:4F:xx:xx:xx):', current);
+  if (addr === null) return;
+  if (!addr.trim()) { removeStrap(bikeId); return; }
+  assignStrapTo(bikeId, addr.trim().toUpperCase());
+}
+
+async function assignStrapTo(bikeId, bleAddr) {
+  const r = await fetch(`${API}/bikes/${bikeId}/strap`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ ble_address: bleAddr }),
+  });
+  if (r.ok) { toast('Pás priradený', 'success'); loadBikes(); }
+  else toast('Chyba priradenia', 'error');
+}
+
+// ── BLE Scanner ────────────────────────────────────────────────────────────
+function rssiSignal(rssi) {
+  const pct = Math.max(0, Math.min(100, (rssi + 100) * 2));
+  const bars = 4;
+  const filled = Math.round(pct / 100 * bars);
+  const heights = [4, 8, 12, 16];
+  return `<div class="rssi-bar">` +
+    heights.map((h, i) => `<span style="height:${h}px" class="${i < filled ? 'active' : ''}"></span>`).join('') +
+    `</div>`;
+}
+
+async function doScan() {
+  const btn = document.getElementById('btn-scan');
+  const spinner = document.getElementById('scan-spinner');
+  const list = document.getElementById('scan-list');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  list.innerHTML = '';
+  selectedDevice = null;
+  document.getElementById('assign-row').style.display = 'none';
+
+  try {
+    const r = await fetch(`${API}/scan`);
+    const devices = await r.json();
+    if (!devices.length) {
+      list.innerHTML = '<div style="color:#555;font-style:italic;padding:8px 0">Žiadne HR zariadenia nenájdené — skontroluj či je pás zapnutý a nasadený</div>';
+    } else {
+      list.innerHTML = devices.map(d => `
+        <div class="scan-card" onclick="selectDevice('${d.address}', '${d.name}')" id="dev-${d.address.replace(/:/g,'_')}">
+          <div>
+            <div class="dev-name">${d.name}</div>
+            <div class="dev-addr">${d.address}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="dev-rssi">${d.rssi} dBm</span>
+            <div class="scan-signal">${rssiSignal(d.rssi)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch(e) {
+    list.innerHTML = '<div style="color:#e06060;padding:8px 0">Scan nedostupný — gateway nie je spustený alebo BT dongle nie je pripojený</div>';
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function selectDevice(address, name) {
+  // deselect all
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('selected'));
+  selectedDevice = { address, name };
+  document.getElementById(`dev-${address.replace(/:/g,'_')}`).classList.add('selected');
+
+  // populate bike select
+  const sel = document.getElementById('assign-bike-select');
+  sel.innerHTML = bikes.map(b => `<option value="${b.id}">Bike ${b.position} — ${b.label}</option>`).join('');
+  document.getElementById('assign-info').textContent = `Vybraný pás: ${name} (${address})`;
+  document.getElementById('assign-row').style.display = 'block';
+}
+
+function cancelAssign() {
+  selectedDevice = null;
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('assign-row').style.display = 'none';
+}
+
+async function doAssign() {
+  if (!selectedDevice) return;
+  const bikeId = parseInt(document.getElementById('assign-bike-select').value);
+  await assignStrapTo(bikeId, selectedDevice.address);
+  cancelAssign();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadStatus();
+loadBikes();
+setInterval(loadStatus, 30000);
+</script>
+</body>
+</html>

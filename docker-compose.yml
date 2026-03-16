@@ -1,0 +1,60 @@
+services:
+  gateway:
+    build: ./gateway
+    restart: unless-stopped
+    network_mode: host        # potrebné pre BLE prístup cez BlueZ/D-Bus
+    volumes:
+      - cache_data:/data
+    environment:
+      - LOCAL_CACHE_DB=/data/local_cache.db
+      - WS_PORT=${WS_PORT:-8765}
+      - GATEWAY_RELOAD_PORT=8766
+    healthcheck:
+      test: ["CMD", "python", "-c", "import websockets"]
+      interval: 30s
+      retries: 3
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - cache_data:/data
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - LOCAL_CACHE_DB=/data/local_cache.db
+      - CLOUD_REZERVAK_URL=${CLOUD_REZERVAK_URL}
+      - STUDIO_API_KEY=${STUDIO_API_KEY}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-300}
+      - GATEWAY_RELOAD_URL=http://gateway:8766/reload
+      - GATEWAY_SCAN_URL=http://gateway:8766/scan
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: studio
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio"]
+      interval: 10s
+      retries: 5
+
+volumes:
+  pgdata:
+  cache_data:

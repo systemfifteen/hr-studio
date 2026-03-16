@@ -1,0 +1,151 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111;font-family:sans-serif}
+#wrap{background:#111;padding:10px;min-height:400px}
+#header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px 10px;color:#fff}
+#header .logo{font-size:18px;font-weight:700;letter-spacing:1px}
+#header .logo span{color:#e03060}
+#clock{font-size:15px;color:#ccc;font-weight:500}
+#controls{display:flex;align-items:center;gap:10px;padding:0 4px 10px;flex-wrap:wrap}
+#controls label{color:#aaa;font-size:13px}
+#controls input[type=range]{width:160px;accent-color:#e03060}
+#user-count-label{color:#fff;font-size:13px;font-weight:500;min-width:24px}
+.btn{background:#222;border:1px solid #444;color:#ccc;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:background .15s}
+.btn:hover{background:#333}
+.btn.active{background:#e03060;border-color:#e03060;color:#fff}
+#grid{display:grid;gap:8px;padding:4px}
+.card{border-radius:10px;padding:10px 12px 8px;position:relative;overflow:hidden;cursor:default;transition:background .4s}
+.card .name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center}
+.card .cal{font-size:12px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:4px}
+.card .pct{font-size:clamp(28px,5vw,52px);font-weight:700;color:#fff;line-height:1.1;margin:4px 0 2px}
+.card .bottom{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.card .bpm{font-size:12px;color:rgba(255,255,255,.8);background:rgba(0,0,0,.25);border-radius:12px;padding:2px 8px}
+.card .meps{font-size:12px;color:rgba(255,255,255,.8);background:rgba(0,0,0,.25);border-radius:12px;padding:2px 8px}
+.zonebar{height:5px;border-radius:3px;margin:6px 0 2px;background:rgba(255,255,255,.15);overflow:hidden}
+.zonebar-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.flame{width:12px;height:12px;display:inline-block;vertical-align:middle}
+.flame svg{width:12px;height:12px}
+</style>
+
+<div id="wrap">
+<div id="header">
+  <div class="logo">HEART<span>ZONE</span></div>
+  <div id="clock">7:54:42 PM</div>
+</div>
+<div id="controls">
+  <label>Počet užívateľov:</label>
+  <input type="range" min="1" max="20" value="5" id="usr-slider" step="1">
+  <span id="user-count-label">5</span>
+  <button class="btn" id="btn-pause">Pauza</button>
+  <button class="btn" id="btn-reset">Reset</button>
+  <span style="color:#555;font-size:11px;margin-left:8px">zóny: </span>
+  <span style="font-size:11px;color:#888">šedá &lt;50% · modrá 50-59% · zelená 60-69% · žltá 70-79% · červená 80%+</span>
+</div>
+<div id="grid"></div>
+</div>
+
+<script>
+const NAMES=['15','mino','rusinka','Sona','stanik','Janka','Marek','Petra','Lukas','Zuzka','Tomáš','Ivana','Martin','Katka','Rudo','Silvia','Ondrej','Monika','Pali','Tereza'];
+const MEP=[220,210,195,185,175,200,190,180,205,188,198,182,202,178,215,192,208,187,212,194];
+const INIT_HR=[132,122,90,118,111,140,135,128,145,120,138,115,142,125,150,130,148,118,144,122];
+const CALS=[409,365,279,343,340,380,355,320,410,295,375,305,395,315,420,345,400,310,415,330];
+const ZONE_COLORS=['#555','#1a5fa8','#1a8c3e','#b8820a','#a01820'];
+
+let users=5, paused=false;
+let hr=[...INIT_HR], meps=[...CALS];
+let targets=[...INIT_HR];
+let drifts=INIT_HR.map(()=>(Math.random()-.5)*0.3);
+
+function getPct(i){return Math.round(hr[i]/MEP[i]*100)}
+function getZone(p){if(p<50)return 0;if(p<60)return 1;if(p<70)return 2;if(p<80)return 3;return 4}
+
+function buildGrid(){
+  const g=document.getElementById('grid');
+  const cols=users<=2?2:users<=4?2:users<=6?3:users<=9?3:users<=12?4:users<=16?4:5;
+  g.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+  g.innerHTML='';
+  for(let i=0;i<users;i++){
+    const p=getPct(i);
+    const z=getZone(p);
+    const bg=ZONE_COLORS[z];
+    const card=document.createElement('div');
+    card.className='card';
+    card.id='card-'+i;
+    card.style.background=bg;
+    const cal=CALS[i];
+    card.innerHTML=`
+      <div class="name">
+        <span>${NAMES[i]}</span>
+        <span class="cal"><svg class="flame" viewBox="0 0 12 14"><path d="M6 1C6 1 9 4 9 7.5C9 9.5 7.7 11 6 11C4.3 11 3 9.5 3 7.5C3 6 4 4.5 4 4.5C4 4.5 4.5 6 5.5 6C5.5 4 6 1 6 1Z" fill="rgba(255,255,255,.8)"/></svg>${cal}</span>
+      </div>
+      <div class="zonebar"><div class="zonebar-fill" id="zbar-${i}" style="width:${p}%;background:rgba(255,255,255,.5)"></div></div>
+      <div class="pct" id="pct-${i}">${p}%</div>
+      <div class="bottom">
+        <span class="bpm" id="bpm-${i}">${Math.round(hr[i])}</span>
+        <span class="meps" id="mep-${i}">MEP ${cal}</span>
+      </div>`;
+    g.appendChild(card);
+  }
+}
+
+function updateCards(){
+  for(let i=0;i<users;i++){
+    const p=getPct(i);
+    const z=getZone(p);
+    const bg=ZONE_COLORS[z];
+    const card=document.getElementById('card-'+i);
+    if(!card)continue;
+    card.style.background=bg;
+    document.getElementById('pct-'+i).textContent=p+'%';
+    document.getElementById('bpm-'+i).textContent=Math.round(hr[i]);
+    document.getElementById('zbar-'+i).style.width=p+'%';
+  }
+}
+
+function tick(){
+  if(paused)return;
+  for(let i=0;i<users;i++){
+    drifts[i]+=(Math.random()-.5)*0.05;
+    drifts[i]=Math.max(-0.8,Math.min(0.8,drifts[i]));
+    hr[i]+=drifts[i]+(targets[i]-hr[i])*0.01;
+    const minHR=MEP[i]*.45, maxHR=MEP[i]*.95;
+    if(hr[i]<minHR){hr[i]=minHR;drifts[i]=Math.abs(drifts[i]);}
+    if(hr[i]>maxHR){hr[i]=maxHR;drifts[i]=-Math.abs(drifts[i]);}
+    if(Math.random()<0.02) targets[i]=MEP[i]*(0.5+Math.random()*0.4);
+    meps[i]+=(Math.random()<0.3?1:0);
+  }
+  updateCards();
+}
+
+function clockTick(){
+  const d=new Date();
+  document.getElementById('clock').textContent=
+    d.toLocaleTimeString('sk-SK',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+document.getElementById('usr-slider').addEventListener('input',function(){
+  users=+this.value;
+  document.getElementById('user-count-label').textContent=users;
+  buildGrid();
+});
+
+document.getElementById('btn-pause').addEventListener('click',function(){
+  paused=!paused;
+  this.textContent=paused?'Pokračovať':'Pauza';
+  this.classList.toggle('active',paused);
+});
+
+document.getElementById('btn-reset').addEventListener('click',function(){
+  hr=[...INIT_HR];
+  meps=[...CALS];
+  targets=[...INIT_HR];
+  drifts=INIT_HR.map(()=>(Math.random()-.5)*0.3);
+  buildGrid();
+});
+
+buildGrid();
+setInterval(tick,800);
+setInterval(clockTick,1000);
+clockTick();
+</script>

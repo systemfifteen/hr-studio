@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR Studio Monitor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  #header { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: #0a0a0a; border-bottom: 1px solid #222; }
+  #header .logo { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
+  #header .logo span { color: #e03060; }
+  #header-right { display: flex; align-items: center; gap: 16px; }
+  #clock { font-size: 16px; color: #ccc; }
+  #conn-status { font-size: 20px; }
+
+  #grid { flex: 1; display: grid; gap: 8px; padding: 10px; align-content: start; overflow: hidden; }
+
+  .card { border-radius: 10px; overflow: hidden; }
+  .card-inner { padding: 10px 12px 8px; height: 100%; border-radius: 10px; transition: background 0.4s; position: relative; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .card-name { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
+  .card-cal { font-size: 12px; color: rgba(255,255,255,.75); }
+  .zone-bar { height: 4px; background: rgba(255,255,255,.15); border-radius: 2px; margin: 4px 0; }
+  .zone-fill { height: 100%; border-radius: 2px; background: rgba(255,255,255,.6); transition: width .6s ease; }
+  .card-pct { font-size: clamp(26px, 4.5vw, 54px); font-weight: 700; color: #fff; line-height: 1.1; margin: 2px 0; }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+  .card-bpm { font-size: 12px; color: rgba(255,255,255,.8); background: rgba(0,0,0,.25); border-radius: 10px; padding: 2px 8px; }
+  .card-pos { font-size: 11px; color: rgba(255,255,255,.4); }
+  .card-offline { position: absolute; bottom: 6px; right: 8px; font-size: 10px; color: rgba(255,255,255,.4); letter-spacing: 1px; }
+
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="logo">HEART<span>ZONE</span></div>
+  <div id="header-right">
+    <span id="clock">--:--:--</span>
+    <span id="conn-status" title="WebSocket stav">○</span>
+  </div>
+</div>
+
+<div id="grid">
+  <div style="color:#555;padding:20px;font-size:14px">Čakám na dáta...</div>
+</div>
+
+<div id="toast"></div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>
