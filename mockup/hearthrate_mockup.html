@@ -1,20 +1,20 @@
 
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#111;font-family:sans-serif}
-#wrap{background:#111;padding:10px;min-height:400px}
-#header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px 10px;color:#fff}
+html,body{height:100%;background:#111;font-family:sans-serif}
+#wrap{background:#111;padding:10px;height:100vh;display:flex;flex-direction:column}
+#header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px 10px;color:#fff;flex-shrink:0}
 #header .logo{font-size:18px;font-weight:700;letter-spacing:1px}
 #header .logo span{color:#e03060}
 #clock{font-size:15px;color:#ccc;font-weight:500}
-#controls{display:flex;align-items:center;gap:10px;padding:0 4px 10px;flex-wrap:wrap}
+#controls{display:flex;align-items:center;gap:10px;padding:0 4px 10px;flex-wrap:wrap;flex-shrink:0}
 #controls label{color:#aaa;font-size:13px}
 #controls input[type=range]{width:160px;accent-color:#e03060}
 #user-count-label{color:#fff;font-size:13px;font-weight:500;min-width:24px}
 .btn{background:#222;border:1px solid #444;color:#ccc;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:background .15s}
 .btn:hover{background:#333}
 .btn.active{background:#e03060;border-color:#e03060;color:#fff}
-#grid{display:grid;gap:8px;padding:4px}
+#grid{display:grid;gap:8px;padding:4px;flex:1;align-content:start}
 .card{border-radius:10px;padding:10px 12px 8px;position:relative;overflow:hidden;cursor:default;transition:background .4s}
 .card .name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center}
 .card .cal{font-size:12px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:4px}
