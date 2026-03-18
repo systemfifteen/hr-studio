@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 HEART_RATE_UUID  = "00002a37-0000-1000-8000-00805f9b34fb"
 RECONNECT_DELAY  = 5    # sekúnd medzi pokusmi o reconnect
-CONNECT_TIMEOUT  = 15.0
+CONNECT_TIMEOUT  = 30.0  # MZ-1 potrebuje ~20s inicializácie pred prvým platným HR
 
 
 class BleStrap:
@@ -82,7 +82,7 @@ class BleStrap:
                         await asyncio.sleep(1)
 
             except (BleakError, asyncio.TimeoutError) as e:
-                logger.debug(f"BLE chyba [{self.ble_address}]: {e}")
+                logger.warning(f"BLE chyba [{self.ble_address}]: {e}")
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -108,11 +108,18 @@ class BleStrap:
         flags = data[0]
         hr    = int.from_bytes(data[1:3], "little") if (flags & 0x01) else data[1]
 
-        now  = time.time()
+        now = time.time()
+        self.connected = True
+        self.last_seen = now
+
+        # HR=0 = inicializácia / žiadny kontakt — ignoruj broadcast, ale spojenie je OK
+        if hr == 0:
+            return
+
         zone = calc_zone(hr, self.max_hr)
         pct  = round(hr / self.max_hr * 100)
 
-        if self.connected and self.weight_kg and self.birth_year:
+        if self.weight_kg and self.birth_year:
             age         = datetime.now().year - self.birth_year
             elapsed_min = (now - self.last_seen) / 60
             self.total_calories += calc_calories(
