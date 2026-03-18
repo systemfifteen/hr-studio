@@ -1,8 +1,23 @@
 services:
+  gateway:
+    build: ./gateway
+    restart: unless-stopped
+    volumes:
+      - /run/dbus:/run/dbus
+      - cache_data:/data
+    privileged: true
+    environment:
+      - LOCAL_CACHE_DB=/data/local_cache.db
+      - WS_PORT=8765
+      - GATEWAY_RELOAD_PORT=8766
+
   frontend:
     build: ./frontend
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     expose:
       - "80"
+    depends_on:
+      - gateway
+
+volumes:
+  cache_data:
