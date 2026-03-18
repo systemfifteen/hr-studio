@@ -2,12 +2,12 @@ const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.ho
 const RECONNECT_MS = 3000;
 
 const ZONE_COLORS = {
-  0: "#555555",   // gray
-  1: "#1a5fa8",   // blue
-  2: "#1a8c3e",   // green
-  3: "#b8820a",   // yellow
-  4: "#c45c10",   // orange (80-89%)
-  5: "#a01820",   // red    (≥90%)
+  0: "#2a2a2a",   // tmavosivá — pod 50%
+  1: "#555555",   // sivá      — 50-59%
+  2: "#1a5fa8",   // modrá     — 60-69%
+  3: "#1a8c3e",   // zelená    — 70-79%
+  4: "#b8820a",   // žltá      — 80-89%
+  5: "#a01820",   // červená   — ≥90%
 };
 
 let riders = {};   // position → {name, hr, pct, zone, calories, connected}
@@ -126,7 +126,7 @@ function cardHTML(pos, r) {
         ${r.battery != null ? `<span class="card-bat-wrap">${batteryIcon(r.battery)}</span>` : ""}
       </div>
       <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
-      <div class="card-pct">${pct}%</div>
+      <div class="card-pct" ${(r.zone ?? 0) === 0 ? 'style="color:#e05050"' : ""}>${pct}%</div>
       <div class="card-meps">${meps} <span class="meps-label">MEPs</span></div>
       <div class="card-footer">
         <span class="card-bpm">♥ ${hr} bpm</span>

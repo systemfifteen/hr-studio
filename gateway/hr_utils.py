@@ -13,8 +13,8 @@ def calc_max_hr(birth_year: int, gender: str = None) -> int:
 
 def calc_zone(hr: int, max_hr: int) -> int:
     """Vráti zónu 0–5 (Myzone-kompatibilné).
-    0=Gray(<50%), 1=Blue(50-59%), 2=Green(60-69%),
-    3=Yellow(70-79%), 4=Orange(80-89%), 5=Red(≥90%)
+    0=pod 50% (sivá, % červenou), 1=Gray(50-59%), 2=Blue(60-69%),
+    3=Green(70-79%), 4=Yellow(80-89%), 5=Red(≥90%)
     """
     pct = hr / max_hr * 100
     if pct < 50:
@@ -57,19 +57,19 @@ def calc_calories(hr: int, weight_kg: float, age: int,
 
 
 ZONE_COLORS = {
-    0: "#555555",   # šedá
-    1: "#1a5fa8",   # modrá
-    2: "#1a8c3e",   # zelená
-    3: "#b8820a",   # žltá
-    4: "#c45c10",   # oranžová
-    5: "#a01820",   # červená
+    0: "#2a2a2a",   # tmavosivá — pod 50%
+    1: "#555555",   # sivá      — 50-59%
+    2: "#1a5fa8",   # modrá     — 60-69%
+    3: "#1a8c3e",   # zelená    — 70-79%
+    4: "#b8820a",   # žltá      — 80-89%
+    5: "#a01820",   # červená   — ≥90%
 }
 
 ZONE_LABELS = {
-    0: "Gray",
-    1: "Blue",
-    2: "Green",
-    3: "Yellow",
-    4: "Orange",
+    0: "Rest",
+    1: "Gray",
+    2: "Blue",
+    3: "Green",
+    4: "Yellow",
     5: "Red",
 }
