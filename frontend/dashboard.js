@@ -52,6 +52,7 @@ function handleMessage(msg) {
         pct:       msg.pct,
         zone:      msg.zone,
         calories:  msg.calories,
+        battery:   msg.battery,
         connected: true,
       });
       updateCard(msg.position);
@@ -92,8 +93,14 @@ function renderGrid() {
   });
 }
 
+function batteryIcon(pct) {
+  if (pct == null) return "";
+  const color = pct <= 20 ? "#e05050" : pct <= 50 ? "#e0a020" : "#60c060";
+  return `<span class="card-bat" style="color:${color}">⬛ ${pct}%</span>`;
+}
+
 function cardHTML(pos, r) {
-  const bg = r.connected === false ? "#2a2a2a" : ZONE_COLORS[r.zone ?? 0];
+  const bg  = r.connected === false ? "#2a2a2a" : ZONE_COLORS[r.zone ?? 0];
   const pct = r.pct ?? 0;
   const hr  = r.hr  ?? "--";
   const cal = r.calories ?? 0;
@@ -110,6 +117,7 @@ function cardHTML(pos, r) {
         <span class="card-pos">#${pos}</span>
       </div>
       ${r.connected === false ? '<div class="card-offline">signal lost</div>' : ""}
+      ${r.battery != null ? `<div class="card-bat-wrap">${batteryIcon(r.battery)}</div>` : ""}
     </div>
   `;
 }

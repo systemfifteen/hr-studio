@@ -10,6 +10,7 @@ from hr_utils import calc_zone, calc_calories
 logger = logging.getLogger(__name__)
 
 HEART_RATE_UUID  = "00002a37-0000-1000-8000-00805f9b34fb"
+BATTERY_UUID     = "00002a19-0000-1000-8000-00805f9b34fb"
 RECONNECT_DELAY  = 5    # sekúnd medzi pokusmi o reconnect
 CONNECT_TIMEOUT  = 30.0  # MZ-1 potrebuje ~20s inicializácie pred prvým platným HR
 
@@ -43,6 +44,7 @@ class BleStrap:
         self.connected      = False
         self.last_seen      = 0.0
         self.last_hr        = 0
+        self.battery        = None   # % alebo None ak nepodporované
         self.total_calories = 0.0
         self._running       = True
         self._task: asyncio.Task | None = None
@@ -76,7 +78,15 @@ class BleStrap:
                     timeout=CONNECT_TIMEOUT,
                 ) as client:
                     await client.start_notify(HEART_RATE_UUID, self._on_hr_data)
-                    logger.info(f"BLE spojené: {self.rider_name} ({self.ble_address})")
+                    try:
+                        bat = await client.read_gatt_char(BATTERY_UUID)
+                        self.battery = bat[0]
+                    except Exception:
+                        self.battery = None
+                    logger.info(
+                        f"BLE spojené: {self.rider_name} ({self.ble_address})"
+                        + (f" — batéria {self.battery}%" if self.battery is not None else "")
+                    )
 
                     while client.is_connected and self._running:
                         await asyncio.sleep(1)
@@ -142,4 +152,5 @@ class BleStrap:
             "zone":     zone,
             "calories": round(self.total_calories),
             "max_hr":   self.max_hr,
+            "battery":  self.battery,
         }))

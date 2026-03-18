@@ -73,6 +73,7 @@ class BleManager:
                 "name":        s.rider_name,
                 "connected":   s.connected,
                 "hr":          s.last_hr,
+                "battery":     s.battery,
                 "ble_address": s.ble_address,
             }
             for s in self.straps.values()
