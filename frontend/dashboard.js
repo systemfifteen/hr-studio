@@ -52,6 +52,7 @@ function handleMessage(msg) {
         pct:       msg.pct,
         zone:      msg.zone,
         calories:  msg.calories,
+        meps:      msg.meps,
         battery:   msg.battery,
         connected: true,
       });
@@ -77,10 +78,11 @@ function handleMessage(msg) {
 function renderGrid() {
   const positions = Object.keys(riders).map(Number).sort((a, b) => a - b);
   const count = positions.length;
-  const cols = count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
+  const cols = count === 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
 
   const grid = document.getElementById("grid");
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  document.documentElement.style.setProperty("--grid-cols", cols);
   grid.innerHTML = "";
 
   positions.forEach((pos) => {
@@ -96,28 +98,30 @@ function renderGrid() {
 function batteryIcon(pct) {
   if (pct == null) return "";
   const color = pct <= 20 ? "#e05050" : pct <= 50 ? "#e0a020" : "#60c060";
-  return `<span class="card-bat" style="color:${color}">⬛ ${pct}%</span>`;
+  return `<span style="color:${color}">⬛ ${pct}%</span>`;
 }
 
 function cardHTML(pos, r) {
-  const bg  = r.connected === false ? "#2a2a2a" : ZONE_COLORS[r.zone ?? 0];
-  const pct = r.pct ?? 0;
-  const hr  = r.hr  ?? "--";
-  const cal = r.calories ?? 0;
+  const bg   = r.connected === false ? "#2a2a2a" : ZONE_COLORS[r.zone ?? 0];
+  const pct  = r.pct ?? 0;
+  const hr   = r.hr  ?? "--";
+  const cal  = r.calories ?? 0;
+  const meps = r.meps ?? 0;
   return `
     <div class="card-inner" style="background:${bg}">
       <div class="card-header">
         <span class="card-name">${r.name ?? `Bike ${pos}`}</span>
-        <span class="card-cal">🔥 ${cal}</span>
+        ${r.battery != null ? `<span class="card-bat-wrap">${batteryIcon(r.battery)}</span>` : ""}
       </div>
       <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
       <div class="card-pct">${pct}%</div>
+      <div class="card-meps">${meps} <span class="meps-label">MEPs</span></div>
       <div class="card-footer">
         <span class="card-bpm">${hr} bpm</span>
+        <span class="card-cal">🔥 ${cal} kcal</span>
         <span class="card-pos">#${pos}</span>
       </div>
       ${r.connected === false ? '<div class="card-offline">signal lost</div>' : ""}
-      ${r.battery != null ? `<div class="card-bat-wrap">${batteryIcon(r.battery)}</div>` : ""}
     </div>
   `;
 }

@@ -46,6 +46,7 @@ class BleStrap:
         self.last_hr        = 0
         self.battery        = None   # % alebo None ak nepodporované
         self.total_calories = 0.0
+        self.total_meps     = 0.0
         self._running       = True
         self._task: asyncio.Task | None = None
 
@@ -118,7 +119,8 @@ class BleStrap:
         flags = data[0]
         hr    = int.from_bytes(data[1:3], "little") if (flags & 0x01) else data[1]
 
-        now = time.time()
+        now       = time.time()
+        prev_seen = self.last_seen   # uložíme pred update pre výpočty
         self.connected = True
         self.last_seen = now
 
@@ -126,12 +128,12 @@ class BleStrap:
         if hr == 0:
             return
 
-        zone = calc_zone(hr, self.max_hr)
-        pct  = round(hr / self.max_hr * 100)
+        zone        = calc_zone(hr, self.max_hr)
+        pct         = round(hr / self.max_hr * 100)
+        elapsed_min = (now - prev_seen) / 60 if prev_seen > 0 else 0.0
 
-        if self.weight_kg and self.birth_year:
-            age         = datetime.now().year - self.birth_year
-            elapsed_min = (now - self.last_seen) / 60
+        if self.weight_kg and self.birth_year and elapsed_min > 0:
+            age = datetime.now().year - self.birth_year
             self.total_calories += calc_calories(
                 hr, self.weight_kg,
                 age=age,
@@ -139,9 +141,11 @@ class BleStrap:
                 duration_min=elapsed_min,
             )
 
-        self.connected = True
-        self.last_seen = now
-        self.last_hr   = hr
+        # MEPs: Myzone Effort Points — 1/2/3/4 bodov za minútu podľa zóny
+        if elapsed_min > 0:
+            self.total_meps += zone * elapsed_min
+
+        self.last_hr = hr
 
         asyncio.create_task(self.broadcast_fn({
             "type":     "hr_update",
@@ -151,6 +155,7 @@ class BleStrap:
             "pct":      pct,
             "zone":     zone,
             "calories": round(self.total_calories),
+            "meps":     round(self.total_meps),
             "max_hr":   self.max_hr,
             "battery":  self.battery,
         }))
