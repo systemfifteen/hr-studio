@@ -1,4 +1,4 @@
-const WS_URL = `ws://${location.hostname}:8765`;
+const WS_URL = `ws://${location.host}/ws`;
 const RECONNECT_MS = 3000;
 
 const ZONE_COLORS = {
