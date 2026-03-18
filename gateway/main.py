@@ -5,11 +5,8 @@ import os
 import time
 
 import websockets
-from bleak import BleakScanner
 from ble_manager import BleManager
-
-HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
-SCAN_TIMEOUT = 10.0   # sekúnd
+from admin_api import AdminApi   # sekúnd
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +21,7 @@ WATCHDOG_TIMEOUT = 5    # sekúnd bez signálu = pás odpojený
 
 connected_clients: set = set()
 manager: BleManager | None = None
+admin_api: AdminApi | None = None
 
 
 async def broadcast(data: dict):
@@ -70,52 +68,46 @@ async def watchdog():
         await asyncio.sleep(2)
 
 
-async def reload_http_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    """Minimálny HTTP server — POST /reload a GET /scan."""
+async def http_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    """HTTP server pre admin API (port RELOAD_PORT)."""
     try:
         first_line = (await asyncio.wait_for(reader.readline(), timeout=5)).decode().strip()
-        # drain zvyšok requestu
+        parts  = first_line.split()
+        method = parts[0] if parts else "GET"
+        path   = parts[1].split("?")[0] if len(parts) > 1 else "/"
+
+        headers = {}
         while True:
             line = await reader.readline()
             if line in (b"\r\n", b"\n", b""):
                 break
+            key, _, val = line.decode().partition(":")
+            headers[key.lower().strip()] = val.strip()
 
-        parts  = first_line.split()
-        method = parts[0] if parts else ""
-        path   = parts[1].split("?")[0] if len(parts) > 1 else "/"
+        body = b""
+        content_length = int(headers.get("content-length", 0))
+        if content_length > 0:
+            body = await reader.read(content_length)
 
-        if method == "POST" and path == "/reload":
-            if manager:
-                logger.info("HTTP reload — reloadujem BLE pásy")
-                await manager.reload()
-                await broadcast({"type": "riders_updated"})
-                body = b'{"ok": true}'
-            else:
-                body = b'{"ok": false, "error": "manager not ready"}'
+        # strip /api prefix
+        api_path = path[4:] if path.startswith("/api") else path
+        if not api_path:
+            api_path = "/"
 
-        elif method == "GET" and path == "/scan":
-            logger.info(f"BLE scan — hľadám HR zariadenia ({SCAN_TIMEOUT}s)...")
-            devices = await BleakScanner.discover(
-                timeout=SCAN_TIMEOUT,
-                service_uuids=[HEART_RATE_SERVICE_UUID],
-            )
-            result = [
-                {"name": d.name or "Unknown", "address": d.address, "rssi": d.rssi}
-                for d in sorted(devices, key=lambda x: -(x.rssi or -999))
-            ]
-            logger.info(f"BLE scan hotový — {len(result)} HR zariadení")
-            body = json.dumps(result).encode()
+        status, result = await admin_api.handle(method, api_path, body)
 
-        else:
-            body = b'{"error": "not found"}'
-
+        resp_body = json.dumps(result).encode()
+        status_text = {200: "OK", 201: "Created", 204: "No Content",
+                       400: "Bad Request", 404: "Not Found", 409: "Conflict"}.get(status, "OK")
         response = (
-            b"HTTP/1.1 200 OK\r\n"
-            b"Content-Type: application/json\r\n"
-            b"Access-Control-Allow-Origin: *\r\n"
-            b"Content-Length: " + str(len(body)).encode() + b"\r\n"
-            b"Connection: close\r\n\r\n" + body
-        )
+            f"HTTP/1.1 {status} {status_text}\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Access-Control-Allow-Origin: *\r\n"
+            f"Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
+            f"Access-Control-Allow-Headers: Content-Type\r\n"
+            f"Content-Length: {len(resp_body)}\r\n"
+            f"Connection: close\r\n\r\n"
+        ).encode() + resp_body
         writer.write(response)
         await writer.drain()
     except Exception as e:
@@ -125,7 +117,7 @@ async def reload_http_handler(reader: asyncio.StreamReader, writer: asyncio.Stre
 
 
 async def main():
-    global manager
+    global manager, admin_api
 
     manager = BleManager(
         cache_db    = CACHE_DB,
@@ -133,10 +125,16 @@ async def main():
     )
     await manager.load_and_start()
 
-    reload_server = await asyncio.start_server(
-        reload_http_handler, "0.0.0.0", RELOAD_PORT
+    admin_api = AdminApi(
+        cache_db    = CACHE_DB,
+        manager     = manager,
+        broadcast_fn= broadcast,
     )
-    logger.info(f"Reload HTTP endpoint na porte {RELOAD_PORT}")
+
+    reload_server = await asyncio.start_server(
+        http_handler, "0.0.0.0", RELOAD_PORT
+    )
+    logger.info(f"Admin API na porte {RELOAD_PORT}")
 
     logger.info(f"WebSocket server štartuje na porte {WS_PORT}")
     async with websockets.serve(ws_handler, "0.0.0.0", WS_PORT):
