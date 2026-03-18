@@ -1,4 +1,4 @@
-const WS_URL = `ws://${location.host}/ws`;
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 const RECONNECT_MS = 3000;
 
 const ZONE_COLORS = {
