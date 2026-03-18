@@ -142,8 +142,9 @@ class BleStrap:
             )
 
         # MEPs: Myzone Effort Points — 1/2/3/4 bodov za minútu podľa zóny
+        # Zóna 4 (80-89%) aj 5 (≥90%) dávajú rovnako 4 MEPs/min
         if elapsed_min > 0:
-            self.total_meps += zone * elapsed_min
+            self.total_meps += min(zone, 4) * elapsed_min
 
         self.last_hr = hr
 

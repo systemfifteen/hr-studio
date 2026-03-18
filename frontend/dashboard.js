@@ -2,11 +2,12 @@ const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.ho
 const RECONNECT_MS = 3000;
 
 const ZONE_COLORS = {
-  0: "#555555",
-  1: "#1a5fa8",
-  2: "#1a8c3e",
-  3: "#b8820a",
-  4: "#a01820",
+  0: "#555555",   // gray
+  1: "#1a5fa8",   // blue
+  2: "#1a8c3e",   // green
+  3: "#b8820a",   // yellow
+  4: "#c45c10",   // orange (80-89%)
+  5: "#a01820",   // red    (≥90%)
 };
 
 let riders = {};   // position → {name, hr, pct, zone, calories, connected}
