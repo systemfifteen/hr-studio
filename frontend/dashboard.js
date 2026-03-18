@@ -128,7 +128,7 @@ function cardHTML(pos, r) {
       <div class="card-pct">${pct}%</div>
       <div class="card-meps">${meps} <span class="meps-label">MEPs</span></div>
       <div class="card-footer">
-        <span class="card-bpm">${hr} bpm</span>
+        <span class="card-bpm">♥ ${hr} bpm</span>
         <span class="card-cal">🔥 ${cal} kcal</span>
         <span class="card-pos">#${pos}</span>
       </div>
