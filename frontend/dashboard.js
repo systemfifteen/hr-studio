@@ -79,10 +79,21 @@ function renderGrid() {
   const positions = Object.keys(riders).map(Number).sort((a, b) => a - b);
   const count = positions.length;
   const cols = count === 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
+  const rows = Math.ceil(count / cols);
 
   const grid = document.getElementById("grid");
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  document.documentElement.style.setProperty("--grid-cols", cols);
+  const GAP = 8, PAD = 10;
+  const availW = grid.clientWidth  - PAD * 2;
+  const availH = grid.clientHeight - PAD * 2;
+  const cellW  = (availW - GAP * (cols - 1)) / cols;
+  const cellH  = (availH - GAP * (rows - 1)) / rows;
+  const cell   = Math.floor(Math.min(cellW, cellH));
+
+  grid.style.gridTemplateColumns = `repeat(${cols}, ${cell}px)`;
+  grid.style.gridTemplateRows    = `repeat(${rows}, ${cell}px)`;
+  grid.style.alignContent        = "center";
+  grid.style.justifyContent      = "center";
+  document.documentElement.style.setProperty("--cell", cell + "px");
   grid.innerHTML = "";
 
   positions.forEach((pos) => {

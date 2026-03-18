@@ -81,7 +81,7 @@ class BleStrap:
                     await client.start_notify(HEART_RATE_UUID, self._on_hr_data)
                     try:
                         bat = await client.read_gatt_char(BATTERY_UUID)
-                        self.battery = bat[0]
+                        self.battery = round(bat[0] / 10) * 10  # zaokrúhli na 10%
                     except Exception:
                         self.battery = None
                     logger.info(
