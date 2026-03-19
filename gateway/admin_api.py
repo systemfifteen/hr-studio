@@ -51,6 +51,9 @@ class AdminApi:
             return await self._scan()
 
         # Riders
+        if method == "GET" and path == "/straps/status":
+            return 200, self._straps_status()
+
         if method == "GET" and path == "/riders":
             return 200, self._get_riders()
 
@@ -115,6 +118,21 @@ class AdminApi:
         count = db.execute("SELECT COUNT(*) FROM riders_cache").fetchone()[0]
         db.close()
         return {"last_sync_ok": 0, "cache_count": count}
+
+    def _straps_status(self):
+        if not self.manager:
+            return []
+        return [
+            {
+                "ble_address": s.ble_address,
+                "position":    s.bike_position,
+                "name":        s.rider_name,
+                "connected":   s.connected,
+                "last_hr":     s.last_hr,
+                "battery":     s.battery,
+            }
+            for s in self.manager.straps.values()
+        ]
 
     def _get_riders(self):
         db   = self._db()

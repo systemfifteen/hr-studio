@@ -157,6 +157,7 @@ input[type=number]{width:80px}
           <th>Label</th>
           <th>Rider</th>
           <th>BLE adresa pásu</th>
+          <th>Live</th>
           <th></th>
         </tr>
       </thead>
@@ -312,6 +313,7 @@ function renderBikes() {
       <td>${b.strap
         ? `<span class="ble-addr">${b.strap.ble_address}</span>`
         : '<span style="color:#444">—</span>'}</td>
+      <td data-strap-pos="${b.position}"><span style="color:#333;font-size:12px">—</span></td>
       <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-secondary btn-small" onclick="editRider(${b.position}, ${JSON.stringify(b.rider||{}).replace(/"/g,'&quot;')})">👤 Rider</button>
         ${b.strap
@@ -575,11 +577,40 @@ function showSummary(summary) {
   alert('Súhrn hodiny:\n\n' + lines);
 }
 
+// ── Live strap status ──────────────────────────────────────────────────────
+let strapStatus = {};
+
+async function loadStrapStatus() {
+  try {
+    const r = await fetch(`${API}/straps/status`);
+    const list = await r.json();
+    strapStatus = {};
+    list.forEach(s => { strapStatus[s.position] = s; });
+    updateStrapDots();
+  } catch(e) {}
+}
+
+function updateStrapDots() {
+  document.querySelectorAll('[data-strap-pos]').forEach(el => {
+    const pos = parseInt(el.dataset.strapPos);
+    const s   = strapStatus[pos];
+    if (s?.connected) {
+      el.innerHTML = `<span class="connected-dot dot-on"></span><span style="color:#4caf78;font-size:12px">♥ ${s.last_hr} bpm</span>`;
+    } else if (s) {
+      el.innerHTML = `<span class="connected-dot dot-off"></span><span style="color:#555;font-size:12px">offline</span>`;
+    } else {
+      el.innerHTML = `<span style="color:#333;font-size:12px">—</span>`;
+    }
+  });
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 loadStatus();
 loadBikes();
 loadSession();
+loadStrapStatus();
 setInterval(loadStatus, 30000);
+setInterval(loadStrapStatus, 3000);
 </script>
 </body>
 </html>

@@ -69,9 +69,12 @@ function handleMessage(msg) {
       break;
 
     case "riders_updated":
-      // Refresh po webhook zmene rezervácie
       setTimeout(() => location.reload(), 2000);
       showToast("Riders aktualizovaní");
+      break;
+
+    case "session_stopped":
+      if (msg.summary?.length) showSummary(msg.summary);
       break;
   }
 }
@@ -145,6 +148,32 @@ function updateCard(pos) {
     return;
   }
   card.innerHTML = cardHTML(pos, riders[pos]);
+}
+
+const ZONE_BG = { 1:"#555555", 2:"#1a5fa8", 3:"#1a8c3e", 4:"#b8820a", 5:"#a01820" };
+
+function showSummary(summary) {
+  const grid = document.getElementById("sum-grid");
+  const totalSec = r => Object.values(r.zones_sec).reduce((a,b) => a+b, 0) || 1;
+  grid.innerHTML = summary.map(r => {
+    const dur = Math.round(r.duration_sec / 60);
+    const bars = [1,2,3,4,5].map(z => {
+      const pct = Math.round((r.zones_sec[z] || 0) / totalSec(r) * 100);
+      return pct > 0
+        ? `<div class="sum-zone-bar" style="width:${pct}%;background:${ZONE_BG[z]}" title="Z${z}: ${Math.round((r.zones_sec[z]||0)/60)}min"></div>`
+        : "";
+    }).join("");
+    return `
+      <div class="sum-card">
+        <div class="sum-name">${r.name}</div>
+        <div class="sum-row"><span>Čas</span><span>${dur} min</span></div>
+        <div class="sum-row"><span>MEPs</span><span>${r.total_meps}</span></div>
+        <div class="sum-row"><span>Kalórie</span><span>${r.total_calories} kcal</span></div>
+        <div class="sum-row"><span>Avg / Max HR</span><span>${r.avg_hr} / ${r.max_hr} bpm</span></div>
+        <div class="sum-zones">${bars}</div>
+      </div>`;
+  }).join("");
+  document.getElementById("summary-overlay").classList.add("open");
 }
 
 function showToast(msg) {

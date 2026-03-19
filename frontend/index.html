@@ -35,6 +35,19 @@
   .card-offline { font-size: calc(var(--cell) * .065); color: rgba(255,255,255,.4); letter-spacing: 1px; text-align: center; padding: 4px 0; }
 
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+
+  #summary-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 50; }
+  #summary-overlay.open { display: flex; }
+  #summary-box { background: #1a1a1a; border: 1px solid #333; border-radius: 14px; padding: 32px; max-width: 90vw; width: 700px; max-height: 85vh; overflow-y: auto; }
+  #summary-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #fff; }
+  .sum-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .sum-card { background: #242424; border-radius: 10px; padding: 14px 16px; }
+  .sum-name { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .sum-row { display: flex; justify-content: space-between; font-size: 13px; color: #aaa; margin-top: 3px; }
+  .sum-row span:last-child { color: #fff; font-weight: 600; }
+  .sum-zones { display: flex; gap: 3px; margin-top: 8px; border-radius: 4px; overflow: hidden; height: 6px; }
+  .sum-zone-bar { height: 100%; }
+  #summary-close { display: block; margin: 24px auto 0; padding: 10px 32px; background: #e03060; border: none; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -48,6 +61,14 @@
 
 <div id="grid">
   <div style="color:#555;padding:20px;font-size:14px">Čakám na dáta...</div>
+</div>
+
+<div id="summary-overlay">
+  <div id="summary-box">
+    <h2>🏁 Koniec hodiny</h2>
+    <div class="sum-grid" id="sum-grid"></div>
+    <button id="summary-close" onclick="document.getElementById('summary-overlay').classList.remove('open')">Zavrieť</button>
+  </div>
 </div>
 
 <div id="toast"></div>
