@@ -119,6 +119,34 @@ input[type=number]{width:80px}
     </div>
   </div>
 
+  <!-- Session management -->
+  <section>
+    <h2>Tréning <span class="badge" id="session-badge">—</span></h2>
+    <div id="session-active" style="display:none;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div class="sitem">
+          <span class="slabel">Hodina</span>
+          <span class="sval" id="sess-label-val">—</span>
+        </div>
+        <div class="sitem">
+          <span class="slabel">Štart</span>
+          <span class="sval" id="sess-started-val">—</span>
+        </div>
+        <div class="sitem">
+          <span class="slabel">Trvanie</span>
+          <span class="sval" id="sess-duration-val">00:00</span>
+        </div>
+        <button class="btn btn-danger" onclick="stopSession()">■ Ukončiť hodinu</button>
+      </div>
+    </div>
+    <div id="session-idle">
+      <div class="form-row">
+        <input type="text" id="session-label-input" placeholder="Názov hodiny (voliteľné)" style="width:280px">
+        <button class="btn btn-primary" onclick="startSession()">▶ Štart hodiny</button>
+      </div>
+    </div>
+  </section>
+
   <!-- Bikes & straps -->
   <section>
     <h2>Bicykle a BLE pásy <span class="badge warn" id="bikes-count">0</span></h2>
@@ -398,9 +426,85 @@ async function doAssign() {
   cancelAssign();
 }
 
+// ── Session ────────────────────────────────────────────────────────────────
+let sessionStartedAt = null;
+let sessionTimer = null;
+
+async function loadSession() {
+  try {
+    const r = await fetch(`${API}/session`);
+    const d = await r.json();
+    if (d.session_id) {
+      showSessionActive(d);
+    } else {
+      showSessionIdle();
+    }
+  } catch(e) { showSessionIdle(); }
+}
+
+function showSessionActive(d) {
+  sessionStartedAt = new Date(d.started_at);
+  document.getElementById('session-active').style.display = 'block';
+  document.getElementById('session-idle').style.display   = 'none';
+  document.getElementById('sess-label-val').textContent   = d.label;
+  document.getElementById('sess-started-val').textContent =
+    sessionStartedAt.toLocaleTimeString('sk-SK');
+  document.getElementById('session-badge').textContent    = 'LIVE';
+  document.getElementById('session-badge').className      = 'badge ok';
+  clearInterval(sessionTimer);
+  sessionTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - sessionStartedAt) / 1000);
+    const m = Math.floor(elapsed / 60).toString().padStart(2,'0');
+    const s = (elapsed % 60).toString().padStart(2,'0');
+    document.getElementById('sess-duration-val').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+function showSessionIdle() {
+  clearInterval(sessionTimer);
+  sessionStartedAt = null;
+  document.getElementById('session-active').style.display = 'none';
+  document.getElementById('session-idle').style.display   = 'block';
+  document.getElementById('session-badge').textContent    = 'neaktívna';
+  document.getElementById('session-badge').className      = 'badge warn';
+}
+
+async function startSession() {
+  const label = document.getElementById('session-label-input').value.trim();
+  const r = await fetch(`${API}/session/start`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ label: label || null }),
+  });
+  const d = await r.json();
+  if (d.error) { toast(d.error, 'error'); return; }
+  toast('Hodina spustená', 'success');
+  showSessionActive(d);
+}
+
+async function stopSession() {
+  if (!confirm('Ukončiť hodinu?')) return;
+  const r = await fetch(`${API}/session/stop`, { method: 'POST' });
+  const d = await r.json();
+  if (d.error) { toast(d.error, 'error'); return; }
+  showSessionIdle();
+  toast('Hodina ukončená', 'success');
+  if (d.summary?.length) showSummary(d.summary);
+}
+
+function showSummary(summary) {
+  const lines = summary.map(r =>
+    `Bike #${r.bike_position} ${r.name}: ` +
+    `avg ${r.avg_hr} bpm | ${r.total_meps} MEPs | ${r.total_calories} kcal | ` +
+    `${Math.round(r.duration_sec/60)} min`
+  ).join('\n');
+  alert('Súhrn hodiny:\n\n' + lines);
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 loadStatus();
 loadBikes();
+loadSession();
 setInterval(loadStatus, 30000);
 </script>
 </body>

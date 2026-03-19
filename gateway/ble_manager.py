@@ -13,9 +13,10 @@ class BleManager:
     Každý pás beží ako samostatný asyncio Task.
     """
 
-    def __init__(self, cache_db: str, broadcast_fn):
-        self.cache_db  = cache_db
-        self.broadcast = broadcast_fn
+    def __init__(self, cache_db: str, broadcast_fn, session_mgr=None):
+        self.cache_db    = cache_db
+        self.broadcast   = broadcast_fn
+        self.session_mgr = session_mgr
         self.straps: dict[str, BleStrap] = {}   # ble_address → BleStrap
 
     def _load_rows(self) -> list:
@@ -52,6 +53,7 @@ class BleManager:
                 birth_year    = birth_year,
                 gender        = gender,
                 broadcast_fn  = self.broadcast,
+                session_mgr   = self.session_mgr,
             )
             self.straps[ble_addr] = strap
             strap.start()

@@ -1,0 +1,187 @@
+import asyncio
+import logging
+import sqlite3
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+FLUSH_INTERVAL = 5   # sekúnd medzi batch insertmi do DB
+
+
+class SessionManager:
+    """
+    Spravuje tréningové session — štart/stop, ukladanie HR dát do SQLite.
+    HR dáta sa bufferujú v pamäti a flushujú po FLUSH_INTERVAL sekundách,
+    aby sme minimalizovali počet DB operácií pri 20 pásoch × 1 packet/s.
+    """
+
+    def __init__(self, cache_db: str):
+        self.cache_db          = cache_db
+        self.current_session_id: int | None = None
+        self._buffer: list     = []
+        self._ensure_tables()
+
+    def _db(self):
+        return sqlite3.connect(self.cache_db)
+
+    def _ensure_tables(self):
+        db = self._db()
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id         INTEGER PRIMARY KEY,
+                started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ended_at   DATETIME,
+                label      TEXT
+            );
+            CREATE TABLE IF NOT EXISTS session_data (
+                session_id    INTEGER REFERENCES sessions(id),
+                bike_position INTEGER,
+                ts            DATETIME DEFAULT CURRENT_TIMESTAMP,
+                hr            INTEGER,
+                zone          INTEGER,
+                cal_inc       REAL,
+                meps_inc      REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sd_session
+                ON session_data(session_id, bike_position);
+        """)
+        db.commit()
+        db.close()
+
+    # ── Štart / Stop ──────────────────────────────────────────────────────────
+
+    def start(self, label: str | None = None) -> dict:
+        if self.current_session_id:
+            return {"error": "session already running",
+                    "session_id": self.current_session_id}
+        label = label or f"Hodina {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+        now   = datetime.now().isoformat(timespec="seconds")
+        db    = self._db()
+        cur   = db.execute(
+            "INSERT INTO sessions(started_at, label) VALUES(?,?)", (now, label)
+        )
+        self.current_session_id = cur.lastrowid
+        db.commit()
+        db.close()
+        logger.info(f"Session #{self.current_session_id} štart — {label}")
+        return {"session_id": self.current_session_id,
+                "label": label, "started_at": now}
+
+    def stop(self) -> dict:
+        if not self.current_session_id:
+            return {"error": "no active session"}
+        # flush zvyšok buffera
+        self._flush_sync()
+        now = datetime.now().isoformat(timespec="seconds")
+        db  = self._db()
+        db.execute("UPDATE sessions SET ended_at=? WHERE id=?",
+                   (now, self.current_session_id))
+        summary = self._build_summary(db, self.current_session_id)
+        db.commit()
+        db.close()
+        sid = self.current_session_id
+        self.current_session_id = None
+        logger.info(f"Session #{sid} ukončená")
+        return {"session_id": sid, "ended_at": now, "summary": summary}
+
+    def get_current(self) -> dict | None:
+        if not self.current_session_id:
+            return None
+        db  = self._db()
+        row = db.execute(
+            "SELECT id, label, started_at FROM sessions WHERE id=?",
+            (self.current_session_id,)
+        ).fetchone()
+        db.close()
+        return {"session_id": row[0], "label": row[1], "started_at": row[2]} if row else None
+
+    def list_sessions(self, limit: int = 20) -> list:
+        db   = self._db()
+        rows = db.execute(
+            "SELECT id, label, started_at, ended_at FROM sessions "
+            "ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        db.close()
+        return [{"session_id": r[0], "label": r[1],
+                 "started_at": r[2], "ended_at": r[3]} for r in rows]
+
+    # ── Záznam HR dát ─────────────────────────────────────────────────────────
+
+    def record(self, bike_position: int, hr: int, zone: int,
+               cal_inc: float, meps_inc: float):
+        """Volaná synchrónne z BleStrap._on_hr_data — len appenduje do buffera."""
+        if not self.current_session_id:
+            return
+        self._buffer.append((
+            self.current_session_id, bike_position,
+            datetime.now().isoformat(timespec="seconds"),
+            hr, zone,
+            round(cal_inc, 3), round(meps_inc, 4),
+        ))
+
+    # ── Flush loop ────────────────────────────────────────────────────────────
+
+    async def flush_loop(self):
+        """Asyncio task — každých FLUSH_INTERVAL sekúnd zapíše buffer do DB."""
+        while True:
+            await asyncio.sleep(FLUSH_INTERVAL)
+            if self._buffer:
+                self._flush_sync()
+
+    def _flush_sync(self):
+        if not self._buffer:
+            return
+        batch = self._buffer[:]
+        self._buffer.clear()
+        try:
+            db = self._db()
+            db.executemany(
+                "INSERT INTO session_data"
+                "(session_id, bike_position, ts, hr, zone, cal_inc, meps_inc)"
+                " VALUES(?,?,?,?,?,?,?)",
+                batch,
+            )
+            db.commit()
+            db.close()
+        except Exception as e:
+            logger.error(f"Session flush chyba: {e}")
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+
+    def _build_summary(self, db, session_id: int) -> list:
+        rows = db.execute("""
+            SELECT
+                d.bike_position,
+                r.name,
+                COUNT(*)                                    AS packets,
+                MIN(d.hr)                                   AS min_hr,
+                MAX(d.hr)                                   AS max_hr,
+                ROUND(AVG(d.hr))                            AS avg_hr,
+                ROUND(SUM(d.meps_inc))                      AS total_meps,
+                ROUND(SUM(d.cal_inc))                       AS total_calories,
+                SUM(CASE WHEN d.zone=1 THEN 1 ELSE 0 END)  AS z1_sec,
+                SUM(CASE WHEN d.zone=2 THEN 1 ELSE 0 END)  AS z2_sec,
+                SUM(CASE WHEN d.zone=3 THEN 1 ELSE 0 END)  AS z3_sec,
+                SUM(CASE WHEN d.zone=4 THEN 1 ELSE 0 END)  AS z4_sec,
+                SUM(CASE WHEN d.zone=5 THEN 1 ELSE 0 END)  AS z5_sec
+            FROM session_data d
+            LEFT JOIN riders_cache r ON r.bike_position = d.bike_position
+            WHERE d.session_id = ?
+            GROUP BY d.bike_position
+        """, (session_id,)).fetchall()
+
+        return [
+            {
+                "bike_position":  r[0],
+                "name":           r[1] or f"Bike {r[0]}",
+                "duration_sec":   r[2],
+                "min_hr":         r[3],
+                "max_hr":         r[4],
+                "avg_hr":         r[5],
+                "total_meps":     r[6],
+                "total_calories": r[7],
+                "zones_sec":      {"1": r[8], "2": r[9], "3": r[10],
+                                   "4": r[11], "5": r[12]},
+            }
+            for r in rows
+        ]

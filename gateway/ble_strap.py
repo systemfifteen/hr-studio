@@ -31,6 +31,7 @@ class BleStrap:
         birth_year: int | None,
         gender: str | None,
         broadcast_fn,
+        session_mgr=None,
     ):
         self.ble_address   = ble_address
         self.bike_position = bike_position
@@ -40,6 +41,7 @@ class BleStrap:
         self.birth_year    = birth_year
         self.gender        = gender
         self.broadcast_fn  = broadcast_fn
+        self.session_mgr   = session_mgr
 
         self.connected      = False
         self.last_seen      = 0.0
@@ -132,21 +134,30 @@ class BleStrap:
         pct         = round(hr / self.max_hr * 100)
         elapsed_min = (now - prev_seen) / 60 if prev_seen > 0 else 0.0
 
+        cal_inc  = 0.0
+        meps_inc = 0.0
+
         if self.weight_kg and self.birth_year and elapsed_min > 0:
-            age = datetime.now().year - self.birth_year
-            self.total_calories += calc_calories(
+            age     = datetime.now().year - self.birth_year
+            cal_inc = calc_calories(
                 hr, self.weight_kg,
                 age=age,
                 gender=self.gender or "M",
                 duration_min=elapsed_min,
             )
+            self.total_calories += cal_inc
 
-        # MEPs: Myzone Effort Points — 1/2/3/4 bodov za minútu podľa zóny
-        # Zóna 4 (80-89%) aj 5 (≥90%) dávajú rovnako 4 MEPs/min
+        # MEPs: Myzone Effort Points — zóna 4 aj 5 = 4 body/min
         if elapsed_min > 0:
-            self.total_meps += min(zone, 4) * elapsed_min
+            meps_inc = min(zone, 4) * elapsed_min
+            self.total_meps += meps_inc
 
         self.last_hr = hr
+
+        if self.session_mgr:
+            self.session_mgr.record(
+                self.bike_position, hr, zone, cal_inc, meps_inc
+            )
 
         asyncio.create_task(self.broadcast_fn({
             "type":     "hr_update",

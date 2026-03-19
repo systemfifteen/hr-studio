@@ -6,7 +6,8 @@ import time
 
 import websockets
 from ble_manager import BleManager
-from admin_api import AdminApi   # sekúnd
+from admin_api import AdminApi
+from session_manager import SessionManager   # sekúnd
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +23,7 @@ WATCHDOG_TIMEOUT = 5    # sekúnd bez signálu = pás odpojený
 connected_clients: set = set()
 manager: BleManager | None = None
 admin_api: AdminApi | None = None
+session_mgr: SessionManager | None = None
 
 
 async def broadcast(data: dict):
@@ -117,11 +119,14 @@ async def http_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
 
 
 async def main():
-    global manager, admin_api
+    global manager, admin_api, session_mgr
+
+    session_mgr = SessionManager(cache_db=CACHE_DB)
 
     manager = BleManager(
         cache_db    = CACHE_DB,
         broadcast_fn= broadcast,
+        session_mgr = session_mgr,
     )
     await manager.load_and_start()
 
@@ -129,6 +134,7 @@ async def main():
         cache_db    = CACHE_DB,
         manager     = manager,
         broadcast_fn= broadcast,
+        session_mgr = session_mgr,
     )
 
     reload_server = await asyncio.start_server(
@@ -141,6 +147,7 @@ async def main():
         async with reload_server:
             await asyncio.gather(
                 watchdog(),
+                session_mgr.flush_loop(),
                 asyncio.Future(),
             )
 

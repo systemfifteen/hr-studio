@@ -11,10 +11,11 @@ SCAN_TIMEOUT = 10.0
 
 
 class AdminApi:
-    def __init__(self, cache_db: str, manager, broadcast_fn):
-        self.cache_db    = cache_db
-        self.manager     = manager
+    def __init__(self, cache_db: str, manager, broadcast_fn, session_mgr=None):
+        self.cache_db     = cache_db
+        self.manager      = manager
         self.broadcast_fn = broadcast_fn
+        self.session_mgr  = session_mgr
 
     def _db(self):
         return sqlite3.connect(self.cache_db)
@@ -46,6 +47,30 @@ class AdminApi:
 
         if method == "GET" and path == "/scan":
             return await self._scan()
+
+        # Session
+        if method == "GET" and path == "/session":
+            cur = self.session_mgr.get_current() if self.session_mgr else None
+            return 200, cur or {"active": False}
+
+        if method == "POST" and path == "/session/start":
+            if not self.session_mgr:
+                return 503, {"error": "session manager not ready"}
+            label = data.get("label")
+            return 200, self.session_mgr.start(label)
+
+        if method == "POST" and path == "/session/stop":
+            if not self.session_mgr:
+                return 503, {"error": "session manager not ready"}
+            result = self.session_mgr.stop()
+            await self.broadcast_fn({"type": "session_stopped",
+                                     "summary": result.get("summary", [])})
+            return 200, result
+
+        if method == "GET" and path == "/sessions":
+            if not self.session_mgr:
+                return 503, {"error": "session manager not ready"}
+            return 200, self.session_mgr.list_sessions()
 
         # /bikes/{id}
         parts = path.split("/")
