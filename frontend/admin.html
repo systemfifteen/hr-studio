@@ -155,8 +155,8 @@ input[type=number]{width:80px}
         <tr>
           <th>Pos.</th>
           <th>Label</th>
+          <th>Rider</th>
           <th>BLE adresa pásu</th>
-          <th>Stav</th>
           <th></th>
         </tr>
       </thead>
@@ -206,6 +206,29 @@ input[type=number]{width:80px}
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Zrušiť</button>
       <button class="btn btn-primary" onclick="saveModal()">Uložiť</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: rider -->
+<div id="rider-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100">
+  <div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:24px;width:380px;max-width:95vw">
+    <h3 style="font-size:16px;margin-bottom:16px">Rider — bicykel <span id="r-bike-label"></span></h3>
+    <div class="form-row"><label>Meno</label><input type="text" id="r-name" placeholder="Meno ridera"></div>
+    <div class="form-row"><label>Rok narodenia</label><input type="number" id="r-birth-year" placeholder="napr. 1990" style="width:100px"></div>
+    <div class="form-row"><label>Váha (kg)</label><input type="number" id="r-weight" placeholder="napr. 75" style="width:100px" step="0.5"></div>
+    <div class="form-row">
+      <label>Pohlavie</label>
+      <select id="r-gender">
+        <option value="M">Muž</option>
+        <option value="F">Žena</option>
+      </select>
+    </div>
+    <div style="font-size:12px;color:#666;margin-top:4px">Max HR sa vypočíta automaticky z veku (Tanaka formula)</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
+      <button class="btn btn-danger btn-small" id="r-delete-btn" onclick="deleteRider()">Zmazať</button>
+      <button class="btn btn-secondary" onclick="closeRiderModal()">Zrušiť</button>
+      <button class="btn btn-primary" onclick="saveRider()">Uložiť</button>
     </div>
   </div>
 </div>
@@ -281,15 +304,20 @@ function renderBikes() {
     <tr>
       <td><span class="pos-badge">${b.position}</span></td>
       <td>${b.label}</td>
+      <td>${b.rider
+        ? `<span style="font-size:12px">${b.rider.name}
+             <span style="color:#666;margin-left:4px">${b.rider.birth_year ? new Date().getFullYear()-b.rider.birth_year+'r' : ''} ${b.rider.weight_kg ? b.rider.weight_kg+'kg' : ''} max${b.rider.max_hr}</span>
+           </span>`
+        : '<span style="color:#444;font-size:12px">—</span>'}</td>
       <td>${b.strap
         ? `<span class="ble-addr">${b.strap.ble_address}</span>`
         : '<span style="color:#444">—</span>'}</td>
-      <td><span class="connected-dot dot-off"></span><span style="color:#555;font-size:12px">offline</span></td>
-      <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end">
+      <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-small" onclick="editRider(${b.position}, ${JSON.stringify(b.rider||{}).replace(/"/g,'&quot;')})">👤 Rider</button>
         ${b.strap
           ? `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '${b.strap.ble_address}')">Zmeniť pás</button>
              <button class="btn btn-danger btn-small" onclick="removeStrap(${b.id})">✕</button>`
-          : `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '')">+ Priradiť pás</button>`}
+          : `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '')">+ Pás</button>`}
         <button class="btn btn-danger btn-small" onclick="deleteBike(${b.id}, ${b.position})">Zmazať</button>
       </td>
     </tr>
@@ -424,6 +452,52 @@ async function doAssign() {
   const bikeId = parseInt(document.getElementById('assign-bike-select').value);
   await assignStrapTo(bikeId, selectedDevice.address);
   cancelAssign();
+}
+
+// ── Rider modal ────────────────────────────────────────────────────────────
+let riderPosition = null;
+
+function editRider(position, rider) {
+  riderPosition = position;
+  const bike = bikes.find(b => b.position === position);
+  document.getElementById('r-bike-label').textContent = `#${position} (${bike?.label || position})`;
+  document.getElementById('r-name').value       = rider.name       || '';
+  document.getElementById('r-birth-year').value = rider.birth_year || '';
+  document.getElementById('r-weight').value     = rider.weight_kg  || '';
+  document.getElementById('r-gender').value     = rider.gender     || 'M';
+  document.getElementById('r-delete-btn').style.display = rider.name ? 'inline-block' : 'none';
+  document.getElementById('rider-modal-overlay').style.display = 'flex';
+}
+
+function closeRiderModal() {
+  document.getElementById('rider-modal-overlay').style.display = 'none';
+  riderPosition = null;
+}
+
+async function saveRider() {
+  const name       = document.getElementById('r-name').value.trim();
+  const birth_year = parseInt(document.getElementById('r-birth-year').value);
+  const weight_kg  = parseFloat(document.getElementById('r-weight').value) || null;
+  const gender     = document.getElementById('r-gender').value;
+  if (!name || !birth_year) { toast('Meno a rok narodenia sú povinné', 'error'); return; }
+  const r = await fetch(`${API}/riders/${riderPosition}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name, birth_year, weight_kg, gender }),
+  });
+  const d = await r.json();
+  if (!r.ok) { toast(d.error || 'Chyba', 'error'); return; }
+  toast(`Uložené — max HR: ${d.max_hr}`, 'success');
+  closeRiderModal();
+  loadBikes();
+}
+
+async function deleteRider() {
+  if (!confirm('Zmazať rider profil?')) return;
+  await fetch(`${API}/riders/${riderPosition}`, { method: 'DELETE' });
+  toast('Rider zmazaný');
+  closeRiderModal();
+  loadBikes();
 }
 
 // ── Session ────────────────────────────────────────────────────────────────

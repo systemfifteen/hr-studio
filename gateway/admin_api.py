@@ -1,8 +1,10 @@
 import json
 import logging
 import sqlite3
+from datetime import datetime
 
 from bleak import BleakScanner
+from hr_utils import calc_max_hr
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,20 @@ class AdminApi:
 
         if method == "GET" and path == "/scan":
             return await self._scan()
+
+        # Riders
+        if method == "GET" and path == "/riders":
+            return 200, self._get_riders()
+
+        if path.startswith("/riders/"):
+            try:
+                position = int(path.split("/")[2])
+            except (IndexError, ValueError):
+                return 400, {"error": "invalid position"}
+            if method == "PUT":
+                return self._upsert_rider(position, data)
+            if method == "DELETE":
+                return self._delete_rider(position)
 
         # Session
         if method == "GET" and path == "/session":
@@ -100,6 +116,49 @@ class AdminApi:
         db.close()
         return {"last_sync_ok": 0, "cache_count": count}
 
+    def _get_riders(self):
+        db   = self._db()
+        rows = db.execute(
+            "SELECT bike_position, name, max_hr, weight_kg, birth_year, gender "
+            "FROM riders_cache ORDER BY bike_position"
+        ).fetchall()
+        db.close()
+        return [
+            {"bike_position": r[0], "name": r[1], "max_hr": r[2],
+             "weight_kg": r[3], "birth_year": r[4], "gender": r[5]}
+            for r in rows
+        ]
+
+    def _upsert_rider(self, position: int, data: dict):
+        name       = (data.get("name") or "").strip()
+        birth_year = data.get("birth_year")
+        weight_kg  = data.get("weight_kg")
+        gender     = (data.get("gender") or "M").upper()
+        if not name:
+            return 400, {"error": "name required"}
+        if not birth_year:
+            return 400, {"error": "birth_year required"}
+        max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender)
+        db = self._db()
+        db.execute("""
+            INSERT INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(bike_position) DO UPDATE SET
+                name=excluded.name, max_hr=excluded.max_hr,
+                weight_kg=excluded.weight_kg, birth_year=excluded.birth_year,
+                gender=excluded.gender, synced_at=CURRENT_TIMESTAMP
+        """, (position, name, max_hr, weight_kg, int(birth_year), gender))
+        db.commit()
+        db.close()
+        return 200, {"ok": True, "max_hr": max_hr}
+
+    def _delete_rider(self, position: int):
+        db = self._db()
+        db.execute("DELETE FROM riders_cache WHERE bike_position=?", (position,))
+        db.commit()
+        db.close()
+        return 200, {"ok": True}
+
     def _get_bikes(self):
         db = self._db()
         bikes = db.execute(
@@ -112,12 +171,20 @@ class AdminApi:
                 "WHERE bike_id=? AND ble_address IS NOT NULL",
                 (bike_id,),
             ).fetchone()
+            rider = db.execute(
+                "SELECT name, max_hr, weight_kg, birth_year, gender "
+                "FROM riders_cache WHERE bike_position=?",
+                (position,),
+            ).fetchone()
             result.append({
                 "id":       bike_id,
                 "position": position,
                 "label":    label,
                 "strap":    {"id": strap[0], "ble_address": strap[1], "label": strap[2]}
                             if strap else None,
+                "rider":    {"name": rider[0], "max_hr": rider[1], "weight_kg": rider[2],
+                             "birth_year": rider[3], "gender": rider[4]}
+                            if rider else None,
             })
         db.close()
         return result
