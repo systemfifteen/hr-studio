@@ -146,8 +146,12 @@ echo -e "${BOLD}Ak potrebuješ admin panel:${NC}"
 echo -e "  Pripoj klávesnicu → Ctrl+Alt+T (terminál cez iný user)"
 echo -e "  Alebo otvor na inom zariadení: http://$(hostname -I | awk '{print $1}')/admin.html"
 echo ""
-echo -e "${BOLD}Reštartuj teraz?${NC}"
-read -r -p "  [y/N] " REBOOT
-if [[ "$REBOOT" =~ ^[Yy]$ ]]; then
-    reboot
+if [[ "${1:-}" == "--non-interactive" ]]; then
+    info "Non-interactive režim — reboot prebehne po dokončení inštalácie"
+else
+    echo -e "${BOLD}Reštartuj teraz?${NC}"
+    read -r -p "  [y/N] " REBOOT
+    if [[ "$REBOOT" =~ ^[Yy]$ ]]; then
+        reboot
+    fi
 fi
