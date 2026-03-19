@@ -32,7 +32,8 @@ success "Systém aktualizovaný"
 info "Inštalujem balíky..."
 apt-get install -y -qq \
     curl git ca-certificates gnupg lsb-release \
-    bluez bluetooth sqlite3
+    bluez bluetooth sqlite3 \
+    fonts-noto-color-emoji
 success "Balíky nainštalované"
 
 # ── 3. Docker ─────────────────────────────────────────────────────────────────
