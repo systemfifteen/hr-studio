@@ -118,9 +118,29 @@ async def http_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         writer.close()
 
 
+BIKE_LAYOUT = [
+    (1,"2"),(2,"14"),(3,"1"),(4,"3"),(5,"X1"),(6,"69"),(7,"110"),
+    (8,"4"),(9,"5"),(10,"6"),(11,"112"),(12,"7"),(13,"8"),(14,"9"),
+    (15,"10"),(16,"11"),(17,"12"),(18,"13"),
+]
+
+def ensure_bikes():
+    """Doplní chýbajúce bicykle do DB (bezpečné pri existujúcej DB)."""
+    import sqlite3
+    db = sqlite3.connect(CACHE_DB)
+    db.executemany(
+        "INSERT OR IGNORE INTO bikes(position, label) VALUES(?,?)",
+        BIKE_LAYOUT,
+    )
+    db.commit()
+    db.close()
+    logger.info("Bikes: OK (18 bicyklov)")
+
+
 async def main():
     global manager, admin_api, session_mgr
 
+    ensure_bikes()
     session_mgr = SessionManager(cache_db=CACHE_DB)
 
     manager = BleManager(
