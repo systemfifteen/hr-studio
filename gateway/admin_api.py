@@ -60,9 +60,9 @@ class AdminApi:
             except (IndexError, ValueError):
                 return 400, {"error": "invalid position"}
             if method == "PUT":
-                return self._upsert_rider(position, data)
+                return await self._upsert_rider(position, data)
             if method == "DELETE":
-                return self._delete_rider(position)
+                return await self._delete_rider(position)
 
         # Session
         if method == "GET" and path == "/session":
@@ -129,7 +129,7 @@ class AdminApi:
             for r in rows
         ]
 
-    def _upsert_rider(self, position: int, data: dict):
+    async def _upsert_rider(self, position: int, data: dict):
         name       = (data.get("name") or "").strip()
         birth_year = data.get("birth_year")
         weight_kg  = data.get("weight_kg")
@@ -150,13 +150,15 @@ class AdminApi:
         """, (position, name, max_hr, weight_kg, int(birth_year), gender))
         db.commit()
         db.close()
+        await self._reload()
         return 200, {"ok": True, "max_hr": max_hr}
 
-    def _delete_rider(self, position: int):
+    async def _delete_rider(self, position: int):
         db = self._db()
         db.execute("DELETE FROM riders_cache WHERE bike_position=?", (position,))
         db.commit()
         db.close()
+        await self._reload()
         return 200, {"ok": True}
 
     def _get_bikes(self):
