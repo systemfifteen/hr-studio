@@ -76,7 +76,7 @@ sleep 8
 
 # Spusti Chromium s dvoma tabmi (dashboard + admin)
 chromium \
-    --kiosk \
+    --start-fullscreen \
     --no-first-run \
     --noerrdialogs \
     --disable-infobars \
@@ -92,7 +92,7 @@ while true; do
     sleep 30
     if ! pgrep -x chromium > /dev/null; then
         chromium \
-            --kiosk \
+            --start-fullscreen \
             --no-first-run \
             --noerrdialogs \
             --disable-infobars \
