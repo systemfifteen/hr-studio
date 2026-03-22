@@ -19,7 +19,7 @@ success() { echo -e "${GREEN}[OK]${NC}   $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
 die()     { echo -e "${RED}[ERR]${NC}  $*" >&2; exit 1; }
 
-DEBIAN_ISO_URL="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12-amd64-netinst.iso"
+DEBIAN_ISO_URL="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.4.0-amd64-netinst.iso"
 DEBIAN_ISO="debian-12-netinst.iso"
 OUTPUT_ISO="hr-studio.iso"
 WORK_DIR="$(mktemp -d)"
@@ -29,7 +29,7 @@ cleanup() { rm -rf "$WORK_DIR"; }
 trap cleanup EXIT
 
 # ── Závislosti ────────────────────────────────────────────────────────────────
-for cmd in xorriso wget; do
+for cmd in xorriso curl; do
     command -v "$cmd" &>/dev/null || die "Chýba: $cmd  →  sudo apt install $cmd"
 done
 
@@ -41,8 +41,8 @@ echo -e "${BOLD}╚════════════════════�
 if [[ -f "$DEBIAN_ISO" ]]; then
     warn "Debian ISO už existuje, preskakujem download"
 else
-    info "Sťahujem Debian 12 netinst (~400 MB)..."
-    wget -q --show-progress -O "$DEBIAN_ISO" "$DEBIAN_ISO_URL"
+    info "Sťahujem Debian 13 netinst (~750 MB)..."
+    curl -L -o "$DEBIAN_ISO" "$DEBIAN_ISO_URL"
     success "Debian ISO stiahnutý"
 fi
 
