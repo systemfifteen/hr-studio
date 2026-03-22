@@ -1,6 +1,10 @@
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 const RECONNECT_MS = 3000;
 
+const HISTORY_MINUTES    = 10;
+const HISTORY_BUCKET_SEC = 10;
+const HISTORY_BUCKETS    = (HISTORY_MINUTES * 60) / HISTORY_BUCKET_SEC; // 60
+
 const ZONE_COLORS = {
   0: "#2a2a2a",   // tmavosivá — pod 50%
   1: "#555555",   // sivá      — 50-59%
@@ -57,6 +61,7 @@ function handleMessage(msg) {
         battery:   msg.battery,
         connected: true,
       });
+      pushZoneHistory(msg.position, msg.zone);
       updateCard(msg.position);
       break;
 
@@ -110,6 +115,36 @@ function renderGrid() {
   });
 }
 
+function pushZoneHistory(pos, zone) {
+  const r = riders[pos];
+  if (!r.zoneHistory) r.zoneHistory = [];
+  r.zoneHistory.push({ zone, ts: Date.now() });
+  const cutoff = Date.now() - (HISTORY_MINUTES * 60 + 30) * 1000;
+  while (r.zoneHistory.length > 0 && r.zoneHistory[0].ts < cutoff) {
+    r.zoneHistory.shift();
+  }
+}
+
+function zoneHistoryHTML(r) {
+  const now     = Date.now();
+  const history = r.zoneHistory || [];
+  const segs    = [];
+  for (let i = 0; i < HISTORY_BUCKETS; i++) {
+    const bucketEnd   = now - (HISTORY_BUCKETS - 1 - i) * HISTORY_BUCKET_SEC * 1000;
+    const bucketStart = bucketEnd - HISTORY_BUCKET_SEC * 1000;
+    let zone = null;
+    for (let j = history.length - 1; j >= 0; j--) {
+      if (history[j].ts >= bucketStart && history[j].ts < bucketEnd) {
+        zone = history[j].zone;
+        break;
+      }
+    }
+    const color = zone !== null ? ZONE_COLORS[zone] : "rgba(255,255,255,0.06)";
+    segs.push(`<div class="zh-seg" style="background:${color}"></div>`);
+  }
+  return `<div class="zone-history">${segs.join("")}</div>`;
+}
+
 function batteryIcon(pct) {
   if (pct == null) return "";
   const color = pct <= 20 ? "#e05050" : pct <= 50 ? "#e0a020" : "#60c060";
@@ -128,6 +163,7 @@ function cardHTML(pos, r) {
         <span class="card-name">${r.name ?? `Bike ${pos}`}</span>
         ${r.battery != null ? `<span class="card-bat-wrap">${batteryIcon(r.battery)}</span>` : ""}
       </div>
+      ${zoneHistoryHTML(r)}
       <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
       <div class="card-pct" ${(r.zone ?? 0) === 0 ? 'style="color:#e05050"' : ""}>${pct}%</div>
       <div class="card-meps">${meps} <span class="meps-label">MEPs</span></div>
