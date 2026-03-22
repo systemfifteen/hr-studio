@@ -74,7 +74,7 @@ unclutter -idle 1 -root &
 # Počkaj kým HR Studio naštartuje (Docker services)
 sleep 8
 
-# Spusti Chromium v kiosk móde
+# Spusti Chromium s dvoma tabmi (dashboard + admin)
 chromium \
     --kiosk \
     --no-first-run \
@@ -84,9 +84,8 @@ chromium \
     --disable-restore-session-state \
     --disable-features=TranslateUI \
     --check-for-update-interval=31536000 \
-    --disable-pinch \
-    --overscroll-history-navigation=0 \
-    "${DASHBOARD_URL}" &
+    "${DASHBOARD_URL}" \
+    "${DASHBOARD_URL}/admin.html" &
 
 # Watchdog: ak Chromium spadne, reštartuj ho
 while true; do
@@ -99,7 +98,8 @@ while true; do
             --disable-infobars \
             --disable-session-crashed-bubble \
             --disable-restore-session-state \
-            "${DASHBOARD_URL}" &
+            "${DASHBOARD_URL}" \
+            "${DASHBOARD_URL}/admin.html" &
     fi
 done &
 EOF
@@ -112,11 +112,11 @@ cat > "${OPENBOX_DIR}/rc.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
   <keyboard>
-    <!-- Zakáž Alt+F4 a iné skratky -->
+    <!-- Klávesnica povolená — tréner môže používať Ctrl+Tab atď. -->
   </keyboard>
   <mouse>
     <context name="Root">
-      <!-- Prázdne — žiadne menu na pravý klik -->
+      <!-- Prázdne — žiadne menu na pravý klik na ploche -->
     </context>
   </mouse>
   <applications>
