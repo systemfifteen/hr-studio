@@ -230,6 +230,29 @@ function showToast(msg) {
   setTimeout(() => (t.style.opacity = "0"), 3000);
 }
 
+// Sieťový stav
+async function updateNetInfo() {
+  const el = document.getElementById("netinfo");
+  if (!el) return;
+  try {
+    const res = await fetch("/api/network");
+    const ifaces = await res.json();
+    if (!ifaces.length) {
+      el.textContent = "🔴 offline";
+      el.style.color = "#e05050";
+    } else {
+      const { iface, type } = ifaces[0];
+      el.textContent = (type === "wifi" ? "🟡" : "🟢") + " " + iface;
+      el.style.color = "#aaa";
+    }
+  } catch {
+    el.textContent = "🔴 offline";
+    el.style.color = "#e05050";
+  }
+}
+updateNetInfo();
+setInterval(updateNetInfo, 10000);
+
 // Hodiny
 function updateClock() {
   const el = document.getElementById("clock");

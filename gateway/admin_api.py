@@ -35,6 +35,9 @@ class AdminApi:
         if method == "GET" and path == "/status":
             return 200, self._status()
 
+        if method == "GET" and path == "/network":
+            return 200, self._network_status()
+
         if method == "GET" and path == "/bikes":
             return 200, self._get_bikes()
 
@@ -112,6 +115,35 @@ class AdminApi:
         return 404, {"error": "not found"}
 
     # ── Handlers ──────────────────────────────────────────────────────────────
+
+    def _network_status(self):
+        import os
+        wireless = set()
+        try:
+            with open("/proc/net/wireless") as f:
+                for line in f.readlines()[2:]:
+                    iface = line.split(":")[0].strip()
+                    if iface:
+                        wireless.add(iface)
+        except Exception:
+            pass
+        result = []
+        try:
+            for iface in sorted(os.listdir("/sys/class/net")):
+                if iface == "lo":
+                    continue
+                try:
+                    with open(f"/sys/class/net/{iface}/operstate") as f:
+                        if f.read().strip() == "up":
+                            result.append({
+                                "iface": iface,
+                                "type": "wifi" if iface in wireless else "eth",
+                            })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return result
 
     def _status(self):
         db = self._db()
