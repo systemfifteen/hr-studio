@@ -183,6 +183,7 @@ input[type=number]{width:80px}
       <div class="form-row">
         <label>Priradiť k bicyklu:</label>
         <select id="assign-bike-select"></select>
+        <input id="assign-strap-label" type="text" placeholder="Štítok pásu (napr. MZ-001)" style="width:200px">
         <button class="btn btn-primary" onclick="doAssign()">Priradiť</button>
         <button class="btn btn-secondary" onclick="cancelAssign()">Zrušiť</button>
       </div>
@@ -311,7 +312,7 @@ function renderBikes() {
            </span>`
         : '<span style="color:#444;font-size:12px">—</span>'}</td>
       <td>${b.strap
-        ? `<span class="ble-addr">${b.strap.ble_address}</span>`
+        ? `<span class="ble-addr">${b.strap.label || b.strap.ble_address}</span><br><span style="color:#555;font-size:11px">${b.strap.ble_address}</span>`
         : '<span style="color:#444">—</span>'}</td>
       <td data-strap-pos="${b.position}"><span style="color:#333;font-size:12px">—</span></td>
       <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
@@ -372,11 +373,11 @@ function editStrap(bikeId, current) {
   assignStrapTo(bikeId, addr.trim().toUpperCase());
 }
 
-async function assignStrapTo(bikeId, bleAddr) {
+async function assignStrapTo(bikeId, bleAddr, label) {
   const r = await fetch(`${API}/bikes/${bikeId}/strap`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ ble_address: bleAddr }),
+    body: JSON.stringify({ ble_address: bleAddr, label: label || bleAddr }),
   });
   if (r.ok) { toast('Pás priradený', 'success'); loadBikes(); }
   else toast('Chyba priradenia', 'error');
@@ -452,7 +453,8 @@ function cancelAssign() {
 async function doAssign() {
   if (!selectedDevice) return;
   const bikeId = parseInt(document.getElementById('assign-bike-select').value);
-  await assignStrapTo(bikeId, selectedDevice.address);
+  const label  = document.getElementById('assign-strap-label').value.trim();
+  await assignStrapTo(bikeId, selectedDevice.address, label);
   cancelAssign();
 }
 
