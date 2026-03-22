@@ -63,6 +63,9 @@ mkdir -p "$OPENBOX_DIR"
 cat > "${OPENBOX_DIR}/autostart" <<EOF
 #!/bin/bash
 
+# Aktivuj všetky pripojené displeje (HDMI, DP) — xrandr --auto = zrkadlenie
+xrandr --auto &
+
 # Vypni šetrič obrazovky a DPMS (TV nesmie zhasnúť)
 xset s off &
 xset -dpms &
