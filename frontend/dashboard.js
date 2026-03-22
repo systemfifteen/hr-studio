@@ -238,4 +238,23 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// Batéria notebooku
+function updateBattery(bat) {
+  const el = document.getElementById("battery");
+  if (!el) return;
+  const pct   = Math.round(bat.level * 100);
+  const color = pct <= 15 ? "#e05050" : pct <= 30 ? "#e0a020" : "#60c060";
+  const icon  = bat.charging ? "⚡" : "🔋";
+  el.textContent  = `${icon} ${pct}%`;
+  el.style.color  = color;
+}
+
+if (navigator.getBattery) {
+  navigator.getBattery().then(bat => {
+    updateBattery(bat);
+    bat.addEventListener("levelchange",    () => updateBattery(bat));
+    bat.addEventListener("chargingchange", () => updateBattery(bat));
+  });
+}
+
 connect();
