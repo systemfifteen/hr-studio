@@ -14,6 +14,16 @@ const ZONE_COLORS = {
   5: "#a01820",   // červená   — ≥90%
 };
 
+// Jasnejšie farby pre pásik histórie — odlíšené od pozadia karty
+const ZONE_HISTORY_COLORS = {
+  0: "#444444",
+  1: "#888888",
+  2: "#2e8fe8",
+  3: "#28c45a",
+  4: "#f0a800",
+  5: "#e02030",
+};
+
 let riders = {};   // position → {name, hr, pct, zone, calories, connected}
 let ws = null;
 
@@ -139,7 +149,7 @@ function zoneHistoryHTML(r) {
         break;
       }
     }
-    const color = zone !== null ? ZONE_COLORS[zone] : "rgba(255,255,255,0.06)";
+    const color = zone !== null ? ZONE_HISTORY_COLORS[zone] : "rgba(255,255,255,0.06)";
     segs.push(`<div class="zh-seg" style="background:${color}"></div>`);
   }
   return `<div class="zone-history">${segs.join("")}</div>`;
