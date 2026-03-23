@@ -40,8 +40,10 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    extra_hosts:
+      - "gateway:host-gateway"   # gateway beží v host network, nie v Docker bridge
     depends_on:
-      - api
+      - gateway
 
   db:
     image: postgres:16-alpine
