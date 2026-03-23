@@ -2,8 +2,8 @@ const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.ho
 const RECONNECT_MS = 3000;
 
 const HISTORY_MINUTES    = 10;
-const HISTORY_BUCKET_SEC = 10;
-const HISTORY_BUCKETS    = (HISTORY_MINUTES * 60) / HISTORY_BUCKET_SEC; // 60
+const HISTORY_BUCKET_SEC = 5;
+const HISTORY_BUCKETS    = (HISTORY_MINUTES * 60) / HISTORY_BUCKET_SEC; // 120
 
 const ZONE_COLORS = {
   0: "#2a2a2a",   // tmavosivá — pod 50%
