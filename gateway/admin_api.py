@@ -74,6 +74,10 @@ class AdminApi:
         if method == "POST" and path == "/sync":
             return await self._reload()   # sync = reload pre teraz
 
+        if method == "POST" and path == "/dashboard-reload":
+            await self.broadcast_fn({"type": "riders_updated"})
+            return 200, {"ok": True}
+
         if method == "GET" and path == "/scan":
             return await self._scan()
 

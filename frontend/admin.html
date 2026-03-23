@@ -126,7 +126,10 @@ input[type=number]{width:80px}
 
   <header>
     <h1>HR Studio <span>Admin</span></h1>
-    <a href="/">← Dashboard</a>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-secondary" onclick="reloadDashboard()" title="Pošle reload všetkým pripojeným dashboardom (TV, prehliadač...)">⟳ Reload TV</button>
+      <a href="/">← Dashboard</a>
+    </div>
   </header>
 
   <!-- Status bar -->
@@ -994,6 +997,12 @@ function renderSessionDetail(riders) {
       </div>
     `;
   }).join('');
+}
+
+// ── Dashboard reload ───────────────────────────────────────────────────────
+async function reloadDashboard() {
+  await fetch(`${API}/dashboard-reload`, { method: 'POST' });
+  toast('Dashboard reload odoslaný', 'success');
 }
 
 // ── Rider catalog ──────────────────────────────────────────────────────────
