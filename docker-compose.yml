@@ -3,8 +3,10 @@ services:
     build: ./gateway
     restart: unless-stopped
     network_mode: host        # potrebné pre BLE prístup cez BlueZ/D-Bus
+    privileged: true          # potrebné pre priamy BLE/BlueZ prístup
     volumes:
       - cache_data:/data
+      - /var/run/dbus:/var/run/dbus   # D-Bus socket pre BlueZ komunikáciu
     environment:
       - LOCAL_CACHE_DB=/data/local_cache.db
       - WS_PORT=${WS_PORT:-8765}

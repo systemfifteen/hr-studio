@@ -43,7 +43,7 @@ class BleManager:
             logger.warning("Žiadni riders v cache alebo žiadne BLE adresy — čakám na admin setup")
             return
 
-        for (ble_addr, position, name, max_hr, weight_kg, birth_year, gender) in rows:
+        for idx, (ble_addr, position, name, max_hr, weight_kg, birth_year, gender) in enumerate(rows):
             strap = BleStrap(
                 ble_address   = ble_addr,
                 bike_position = position,
@@ -54,6 +54,7 @@ class BleManager:
                 gender        = gender,
                 broadcast_fn  = self.broadcast,
                 session_mgr   = self.session_mgr,
+                start_delay   = idx * 2.0,
             )
             self.straps[ble_addr] = strap
             strap.start()

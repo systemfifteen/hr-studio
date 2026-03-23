@@ -32,6 +32,7 @@ class BleStrap:
         gender: str | None,
         broadcast_fn,
         session_mgr=None,
+        start_delay: float = 0.0,
     ):
         self.ble_address   = ble_address
         self.bike_position = bike_position
@@ -42,6 +43,7 @@ class BleStrap:
         self.gender        = gender
         self.broadcast_fn  = broadcast_fn
         self.session_mgr   = session_mgr
+        self.start_delay   = start_delay
 
         self.connected      = False
         self.last_seen      = 0.0
@@ -70,6 +72,8 @@ class BleStrap:
     # ─── Hlavná slučka ────────────────────────────────────────────────────────
 
     async def _connect_loop(self):
+        if self.start_delay > 0:
+            await asyncio.sleep(self.start_delay)
         while self._running:
             try:
                 logger.info(
