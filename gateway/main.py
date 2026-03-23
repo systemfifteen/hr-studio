@@ -155,7 +155,7 @@ async def main():
     global manager, admin_api, session_mgr
 
     ensure_bikes()
-    session_mgr = SessionManager(cache_db=CACHE_DB)
+    session_mgr = SessionManager(cache_db=CACHE_DB, broadcast_fn=broadcast)
 
     manager = BleManager(
         cache_db    = CACHE_DB,

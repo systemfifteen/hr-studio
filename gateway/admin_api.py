@@ -92,8 +92,14 @@ class AdminApi:
         if method == "POST" and path == "/session/start":
             if not self.session_mgr:
                 return 503, {"error": "session manager not ready"}
-            label = data.get("label")
-            return 200, self.session_mgr.start(label)
+            label    = data.get("label")
+            duration = data.get("planned_duration_min")
+            if duration is not None:
+                try:
+                    duration = int(duration)
+                except (ValueError, TypeError):
+                    duration = None
+            return 200, self.session_mgr.start(label, duration)
 
         if method == "POST" and path == "/session/stop":
             if not self.session_mgr:

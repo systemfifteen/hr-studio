@@ -17,9 +17,11 @@ class SessionManager:
     aby sme minimalizovali počet DB operácií pri 20 pásoch × 1 packet/s.
     """
 
-    def __init__(self, cache_db: str):
+    def __init__(self, cache_db: str, broadcast_fn=None):
         self.cache_db          = cache_db
+        self.broadcast_fn      = broadcast_fn
         self.current_session_id: int | None = None
+        self._planned_end: float | None = None   # unix timestamp
         self._buffer: list     = []
         self._ensure_tables()
 
@@ -30,10 +32,11 @@ class SessionManager:
         db = self._db()
         db.executescript("""
             CREATE TABLE IF NOT EXISTS sessions (
-                id         INTEGER PRIMARY KEY,
-                started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                ended_at   DATETIME,
-                label      TEXT
+                id                  INTEGER PRIMARY KEY,
+                started_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ended_at            DATETIME,
+                label               TEXT,
+                planned_duration_min INTEGER
             );
             CREATE TABLE IF NOT EXISTS session_data (
                 session_id    INTEGER REFERENCES sessions(id),
@@ -48,12 +51,20 @@ class SessionManager:
             CREATE INDEX IF NOT EXISTS idx_sd_session
                 ON session_data(session_id, bike_position);
         """)
+        # Migrácie — pridaj stĺpce ak chýbajú (existujúce DB)
+        existing = {r[1] for r in db.execute("PRAGMA table_info(session_data)")}
+        if "watts" not in existing:
+            db.execute("ALTER TABLE session_data ADD COLUMN watts INTEGER DEFAULT 0")
+        existing_s = {r[1] for r in db.execute("PRAGMA table_info(sessions)")}
+        if "planned_duration_min" not in existing_s:
+            db.execute("ALTER TABLE sessions ADD COLUMN planned_duration_min INTEGER")
         db.commit()
         db.close()
 
     # ── Štart / Stop ──────────────────────────────────────────────────────────
 
-    def start(self, label: str | None = None) -> dict:
+    def start(self, label: str | None = None,
+              planned_duration_min: int | None = None) -> dict:
         if self.current_session_id:
             return {"error": "session already running",
                     "session_id": self.current_session_id}
@@ -61,14 +72,20 @@ class SessionManager:
         now   = datetime.now().isoformat(timespec="seconds")
         db    = self._db()
         cur   = db.execute(
-            "INSERT INTO sessions(started_at, label) VALUES(?,?)", (now, label)
+            "INSERT INTO sessions(started_at, label, planned_duration_min) VALUES(?,?,?)",
+            (now, label, planned_duration_min)
         )
         self.current_session_id = cur.lastrowid
+        import time
+        self._planned_end = (time.time() + planned_duration_min * 60
+                             if planned_duration_min else None)
         db.commit()
         db.close()
-        logger.info(f"Session #{self.current_session_id} štart — {label}")
+        logger.info(f"Session #{self.current_session_id} štart — {label}"
+                    + (f" (plán {planned_duration_min} min)" if planned_duration_min else ""))
         return {"session_id": self.current_session_id,
-                "label": label, "started_at": now}
+                "label": label, "started_at": now,
+                "planned_duration_min": planned_duration_min}
 
     def stop(self) -> dict:
         if not self.current_session_id:
@@ -125,11 +142,24 @@ class SessionManager:
     # ── Flush loop ────────────────────────────────────────────────────────────
 
     async def flush_loop(self):
-        """Asyncio task — každých FLUSH_INTERVAL sekúnd zapíše buffer do DB."""
+        """Asyncio task — každých FLUSH_INTERVAL sekúnd zapíše buffer do DB + auto-stop."""
+        import time
         while True:
             await asyncio.sleep(FLUSH_INTERVAL)
             if self._buffer:
                 self._flush_sync()
+            # Auto-stop po uplynutí plánovaného času
+            if self._planned_end and self.current_session_id:
+                if time.time() >= self._planned_end:
+                    logger.info("Auto-stop — plánovaný čas vypršal")
+                    result = self.stop()
+                    self._planned_end = None
+                    if self.broadcast_fn:
+                        asyncio.create_task(self.broadcast_fn({
+                            "type":    "session_stopped",
+                            "summary": result.get("summary", []),
+                            "auto":    True,
+                        }))
 
     def _flush_sync(self):
         if not self._buffer:
