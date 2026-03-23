@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import logging
 import sqlite3
 from datetime import datetime
@@ -40,7 +42,8 @@ class SessionManager:
                 hr            INTEGER,
                 zone          INTEGER,
                 cal_inc       REAL,
-                meps_inc      REAL
+                meps_inc      REAL,
+                watts         INTEGER
             );
             CREATE INDEX IF NOT EXISTS idx_sd_session
                 ON session_data(session_id, bike_position);
@@ -108,7 +111,7 @@ class SessionManager:
     # ── Záznam HR dát ─────────────────────────────────────────────────────────
 
     def record(self, bike_position: int, hr: int, zone: int,
-               cal_inc: float, meps_inc: float):
+               cal_inc: float, meps_inc: float, watts: int = 0):
         """Volaná synchrónne z BleStrap._on_hr_data — len appenduje do buffera."""
         if not self.current_session_id:
             return
@@ -116,7 +119,7 @@ class SessionManager:
             self.current_session_id, bike_position,
             datetime.now().isoformat(timespec="seconds"),
             hr, zone,
-            round(cal_inc, 3), round(meps_inc, 4),
+            round(cal_inc, 3), round(meps_inc, 4), watts,
         ))
 
     # ── Flush loop ────────────────────────────────────────────────────────────
@@ -137,8 +140,8 @@ class SessionManager:
             db = self._db()
             db.executemany(
                 "INSERT INTO session_data"
-                "(session_id, bike_position, ts, hr, zone, cal_inc, meps_inc)"
-                " VALUES(?,?,?,?,?,?,?)",
+                "(session_id, bike_position, ts, hr, zone, cal_inc, meps_inc, watts)"
+                " VALUES(?,?,?,?,?,?,?,?)",
                 batch,
             )
             db.commit()
@@ -163,7 +166,9 @@ class SessionManager:
                 SUM(CASE WHEN d.zone=2 THEN 1 ELSE 0 END)  AS z2_sec,
                 SUM(CASE WHEN d.zone=3 THEN 1 ELSE 0 END)  AS z3_sec,
                 SUM(CASE WHEN d.zone=4 THEN 1 ELSE 0 END)  AS z4_sec,
-                SUM(CASE WHEN d.zone=5 THEN 1 ELSE 0 END)  AS z5_sec
+                SUM(CASE WHEN d.zone=5 THEN 1 ELSE 0 END)  AS z5_sec,
+                ROUND(AVG(CASE WHEN d.watts > 0 THEN d.watts END)) AS avg_watts,
+                MAX(d.watts)                                AS max_watts
             FROM session_data d
             LEFT JOIN riders_cache r ON r.bike_position = d.bike_position
             WHERE d.session_id = ?
@@ -182,6 +187,39 @@ class SessionManager:
                 "total_calories": r[7],
                 "zones_sec":      {"1": r[8], "2": r[9], "3": r[10],
                                    "4": r[11], "5": r[12]},
+                "avg_watts":      r[13] or 0,
+                "max_watts":      r[14] or 0,
             }
             for r in rows
         ]
+
+    def get_summary(self, session_id: int) -> list:
+        db = self._db()
+        result = self._build_summary(db, session_id)
+        db.close()
+        return result
+
+    def export_csv(self, session_id: int) -> str:
+        db  = self._db()
+        row = db.execute(
+            "SELECT label, started_at FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        rows = db.execute("""
+            SELECT d.ts, d.bike_position, r.name, d.hr, d.zone,
+                   ROUND(d.cal_inc,2), ROUND(d.meps_inc,4), d.watts
+            FROM session_data d
+            LEFT JOIN riders_cache r ON r.bike_position = d.bike_position
+            WHERE d.session_id = ?
+            ORDER BY d.ts, d.bike_position
+        """, (session_id,)).fetchall()
+        db.close()
+
+        out = io.StringIO()
+        w   = csv.writer(out)
+        w.writerow(["session_id", "label", "started_at"])
+        w.writerow([session_id, row[0] if row else "", row[1] if row else ""])
+        w.writerow([])
+        w.writerow(["ts", "bike_position", "name", "hr", "zone",
+                    "cal_inc", "meps_inc", "watts"])
+        w.writerows(rows)
+        return out.getvalue()

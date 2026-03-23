@@ -5,7 +5,7 @@ from datetime import datetime
 
 from bleak import BleakClient, BleakError
 
-from hr_utils import calc_zone, calc_calories
+from hr_utils import calc_zone, calc_calories, calc_watts
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +136,7 @@ class BleStrap:
 
         cal_inc  = 0.0
         meps_inc = 0.0
+        watts    = 0
 
         if self.weight_kg and self.birth_year and elapsed_min > 0:
             age     = datetime.now().year - self.birth_year
@@ -145,6 +146,7 @@ class BleStrap:
                 gender=self.gender or "M",
                 duration_min=elapsed_min,
             )
+            watts = calc_watts(hr, self.weight_kg, age=age, gender=self.gender or "M")
             self.total_calories += cal_inc
 
         # MEPs: Myzone Effort Points — zóna 4 aj 5 = 4 body/min
@@ -156,7 +158,7 @@ class BleStrap:
 
         if self.session_mgr:
             self.session_mgr.record(
-                self.bike_position, hr, zone, cal_inc, meps_inc
+                self.bike_position, hr, zone, cal_inc, meps_inc, watts
             )
 
         asyncio.create_task(self.broadcast_fn({
@@ -168,6 +170,7 @@ class BleStrap:
             "zone":     zone,
             "calories": round(self.total_calories),
             "meps":     round(self.total_meps),
+            "watts":    watts,
             "max_hr":   self.max_hr,
             "battery":  self.battery,
         }))

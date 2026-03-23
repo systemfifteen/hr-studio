@@ -93,6 +93,32 @@ input[type=number]{width:80px}
 
 /* ── Catalog label badge ── */
 .catalog-label{display:inline-block;background:#1a3040;border:1px solid #2a5060;color:#7ecfff;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle}
+
+/* ── Session detail overlay ── */
+#session-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:flex-start;justify-content:center;z-index:150;overflow-y:auto;padding:24px 16px}
+#session-detail-overlay.open{display:flex}
+#session-detail-box{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:24px;width:700px;max-width:98vw;margin:auto}
+#session-detail-box h3{font-size:16px;font-weight:700;margin-bottom:4px}
+#session-detail-box .detail-meta{font-size:12px;color:#666;margin-bottom:20px}
+.rider-card{background:#141414;border:1px solid #222;border-radius:8px;padding:14px 16px;margin-bottom:10px}
+.rider-card .rc-name{font-weight:700;font-size:14px;margin-bottom:8px}
+.rc-stats{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px}
+.rc-stat{display:flex;flex-direction:column;gap:2px}
+.rc-stat .rc-slabel{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.rc-stat .rc-sval{font-size:13px;font-weight:600}
+.zone-bar-wrap{margin-top:6px}
+.zone-bar-wrap .zb-label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.zone-bar{display:flex;height:10px;border-radius:4px;overflow:hidden;background:#1e1e1e;width:100%}
+.zone-bar .zs{transition:width .3s}
+.zs-0{background:#555}
+.zs-1{background:#3a7bd5}
+.zs-2{background:#4caf78}
+.zs-3{background:#c8a020}
+.zs-4{background:#e03060}
+.zone-legend{display:flex;gap:8px;margin-top:4px;flex-wrap:wrap}
+.zone-legend span{font-size:10px;color:#888;display:flex;align-items:center;gap:3px}
+.zone-legend span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px}
+.zl-0::before{background:#555}.zl-1::before{background:#3a7bd5}.zl-2::before{background:#4caf78}.zl-3::before{background:#c8a020}.zl-4::before{background:#e03060}
 </style>
 </head>
 <body>
@@ -224,6 +250,26 @@ input[type=number]{width:80px}
     </div>
   </section>
 
+  <!-- Sessions history -->
+  <section>
+    <h2>História sessions <span class="badge warn" id="sessions-count">0</span></h2>
+    <table class="tbl" id="sessions-table">
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>Názov</th>
+          <th>Začiatok</th>
+          <th>Koniec</th>
+          <th>Trvanie</th>
+          <th style="text-align:right">Akcie</th>
+        </tr>
+      </thead>
+      <tbody id="sessions-tbody">
+        <tr><td colspan="6" class="empty">Načítavam...</td></tr>
+      </tbody>
+    </table>
+  </section>
+
 </div>
 
 <!-- Modal: pridaj bicykel -->
@@ -265,6 +311,18 @@ input[type=number]{width:80px}
       <button class="btn btn-secondary" onclick="closeRiderModal()">Zrušiť</button>
       <button class="btn btn-primary" onclick="saveRider()">Uložiť</button>
     </div>
+  </div>
+</div>
+
+<!-- Session detail overlay -->
+<div id="session-detail-overlay">
+  <div id="session-detail-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <h3 id="sd-title">Detail session</h3>
+      <button class="btn btn-secondary btn-small" onclick="closeSessionDetail()">✕ Zavrieť</button>
+    </div>
+    <div class="detail-meta" id="sd-meta"></div>
+    <div id="sd-content"><div style="color:#555;font-style:italic">Načítavam...</div></div>
   </div>
 </div>
 
@@ -739,12 +797,150 @@ function updateStrapDots() {
   });
 }
 
+// ── Sessions history ────────────────────────────────────────────────────────
+async function loadSessions() {
+  try {
+    const r = await fetch(`${API}/sessions`);
+    const sessions = await r.json();
+    renderSessions(sessions);
+  } catch(e) {
+    document.getElementById('sessions-tbody').innerHTML =
+      '<tr><td colspan="6" class="empty">Chyba načítania</td></tr>';
+  }
+}
+
+function sessionDuration(startedAt, endedAt) {
+  if (!endedAt) return '—';
+  const diffSec = Math.round((new Date(endedAt) - new Date(startedAt)) / 1000);
+  if (diffSec < 60) return diffSec + ' s';
+  return Math.round(diffSec / 60) + ' min';
+}
+
+function fmtDatetime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('sk-SK', { day:'2-digit', month:'2-digit', year:'numeric' }) +
+    ' ' + d.toLocaleTimeString('sk-SK', { hour:'2-digit', minute:'2-digit' });
+}
+
+function renderSessions(sessions) {
+  document.getElementById('sessions-count').textContent = sessions.length;
+  const tbody = document.getElementById('sessions-tbody');
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Žiadne sessions</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sessions.map((s, i) => `
+    <tr>
+      <td style="color:#555;font-size:12px">${s.session_id}</td>
+      <td style="font-weight:600">${s.label || '—'}</td>
+      <td style="font-size:12px;color:#aaa">${fmtDatetime(s.started_at)}</td>
+      <td style="font-size:12px;color:#aaa">${s.ended_at ? fmtDatetime(s.ended_at) : '<span class="badge ok" style="font-size:10px">LIVE</span>'}</td>
+      <td style="font-size:12px;color:#888">${sessionDuration(s.started_at, s.ended_at)}</td>
+      <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-small" onclick="openSessionDetail(${s.session_id}, ${JSON.stringify(s.label||'').replace(/"/g,'&quot;')}, ${JSON.stringify(s.started_at||'').replace(/"/g,'&quot;')}, ${JSON.stringify(s.ended_at||'').replace(/"/g,'&quot;')})">📊 Detail</button>
+        <a class="btn btn-secondary btn-small" href="${API}/sessions/${s.session_id}/export.csv" target="_blank" style="display:inline-flex;align-items:center">⬇ CSV</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Session detail overlay ───────────────────────────────────────────────────
+function closeSessionDetail() {
+  document.getElementById('session-detail-overlay').classList.remove('open');
+}
+
+async function openSessionDetail(sessionId, label, startedAt, endedAt) {
+  const overlay = document.getElementById('session-detail-overlay');
+  document.getElementById('sd-title').textContent = label || `Session #${sessionId}`;
+  document.getElementById('sd-meta').textContent =
+    fmtDatetime(startedAt) + (endedAt ? (' → ' + fmtDatetime(endedAt) + ' (' + sessionDuration(startedAt, endedAt) + ')') : ' — prebieha');
+  document.getElementById('sd-content').innerHTML = '<div style="color:#555;font-style:italic">Načítavam...</div>';
+  overlay.classList.add('open');
+
+  try {
+    const r = await fetch(`${API}/sessions/${sessionId}/summary`);
+    if (!r.ok) throw new Error(r.status);
+    const riders = await r.json();
+    renderSessionDetail(riders);
+  } catch(e) {
+    document.getElementById('sd-content').innerHTML =
+      '<div style="color:#e06060;padding:8px 0">Chyba načítania detailu session</div>';
+  }
+}
+
+function renderSessionDetail(riders) {
+  if (!riders.length) {
+    document.getElementById('sd-content').innerHTML =
+      '<div class="empty">Žiadne dáta pre túto session</div>';
+    return;
+  }
+
+  const zoneColors = ['zs-0','zs-1','zs-2','zs-3','zs-4'];
+  const zoneNames  = ['Z0','Z1','Z2','Z3','Z4'];
+
+  document.getElementById('sd-content').innerHTML = riders.map(rider => {
+    const durMin = rider.duration_sec ? Math.round(rider.duration_sec / 60) : 0;
+    const zones = rider.zones_sec || {};
+    const totalZoneSec = Object.values(zones).reduce((a, v) => a + (v || 0), 0);
+
+    const zoneBarSegments = [0,1,2,3,4].map(z => {
+      const sec = zones[z] || 0;
+      const pct = totalZoneSec > 0 ? (sec / totalZoneSec * 100).toFixed(1) : 0;
+      return pct > 0
+        ? `<div class="zs ${zoneColors[z]}" style="width:${pct}%" title="${zoneNames[z]}: ${Math.round(sec/60)} min"></div>`
+        : '';
+    }).join('');
+
+    const zoneStats = [0,1,2,3,4].map(z => {
+      const sec = zones[z] || 0;
+      if (!sec) return '';
+      return `<span class="zl-${z}">${zoneNames[z]}: ${Math.round(sec/60)} min</span>`;
+    }).filter(Boolean).join('');
+
+    return `
+      <div class="rider-card">
+        <div class="rc-name">${rider.name || '—'}</div>
+        <div class="rc-stats">
+          <div class="rc-stat">
+            <span class="rc-slabel">Trvanie</span>
+            <span class="rc-sval">${durMin} min</span>
+          </div>
+          <div class="rc-stat">
+            <span class="rc-slabel">Avg HR</span>
+            <span class="rc-sval">${rider.avg_hr ? rider.avg_hr + ' bpm' : '—'}</span>
+          </div>
+          <div class="rc-stat">
+            <span class="rc-slabel">Max HR</span>
+            <span class="rc-sval">${rider.max_hr ? rider.max_hr + ' bpm' : '—'}</span>
+          </div>
+          <div class="rc-stat">
+            <span class="rc-slabel">MEPs</span>
+            <span class="rc-sval" style="color:#e03060">${rider.total_meps ?? '—'}</span>
+          </div>
+          <div class="rc-stat">
+            <span class="rc-slabel">Kalórie</span>
+            <span class="rc-sval">${rider.total_calories ? rider.total_calories + ' kcal' : '—'}</span>
+          </div>
+        </div>
+        ${totalZoneSec > 0 ? `
+        <div class="zone-bar-wrap">
+          <div class="zb-label">HR zóny</div>
+          <div class="zone-bar">${zoneBarSegments}</div>
+          <div class="zone-legend">${zoneStats}</div>
+        </div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 loadStatus();
 loadBikes();
 loadSession();
 loadStrapStatus();
 loadStrapCatalog();
+loadSessions();
 setInterval(loadStatus, 30000);
 setInterval(loadStrapStatus, 3000);
 </script>

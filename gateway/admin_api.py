@@ -108,6 +108,21 @@ class AdminApi:
                 return 503, {"error": "session manager not ready"}
             return 200, self.session_mgr.list_sessions()
 
+        if path.startswith("/sessions/"):
+            parts = path.split("/")
+            try:
+                sid = int(parts[2])
+            except (IndexError, ValueError):
+                return 400, {"error": "invalid session id"}
+            if method == "GET" and len(parts) == 4 and parts[3] == "summary":
+                if not self.session_mgr:
+                    return 503, {"error": "session manager not ready"}
+                return 200, self.session_mgr.get_summary(sid)
+            if method == "GET" and len(parts) == 4 and parts[3] == "export.csv":
+                if not self.session_mgr:
+                    return 503, {"error": "session manager not ready"}
+                return 200, {"__csv__": self.session_mgr.export_csv(sid), "session_id": sid}
+
         # Strap catalog
         if method == "GET" and path == "/strap-catalog":
             return 200, self._get_catalog()

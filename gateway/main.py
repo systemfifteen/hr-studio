@@ -98,18 +98,32 @@ async def http_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
 
         status, result = await admin_api.handle(method, api_path, body)
 
-        resp_body = json.dumps(result).encode()
         status_text = {200: "OK", 201: "Created", 204: "No Content",
                        400: "Bad Request", 404: "Not Found", 409: "Conflict"}.get(status, "OK")
-        response = (
-            f"HTTP/1.1 {status} {status_text}\r\n"
-            f"Content-Type: application/json\r\n"
-            f"Access-Control-Allow-Origin: *\r\n"
-            f"Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
-            f"Access-Control-Allow-Headers: Content-Type\r\n"
-            f"Content-Length: {len(resp_body)}\r\n"
-            f"Connection: close\r\n\r\n"
-        ).encode() + resp_body
+
+        # CSV export — špeciálna odpoveď
+        if isinstance(result, dict) and "__csv__" in result:
+            csv_data   = result["__csv__"].encode()
+            filename   = f"session_{result['session_id']}.csv"
+            response = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: text/csv\r\n"
+                f"Content-Disposition: attachment; filename=\"{filename}\"\r\n"
+                f"Access-Control-Allow-Origin: *\r\n"
+                f"Content-Length: {len(csv_data)}\r\n"
+                f"Connection: close\r\n\r\n"
+            ).encode() + csv_data
+        else:
+            resp_body = json.dumps(result).encode()
+            response = (
+                f"HTTP/1.1 {status} {status_text}\r\n"
+                f"Content-Type: application/json\r\n"
+                f"Access-Control-Allow-Origin: *\r\n"
+                f"Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
+                f"Access-Control-Allow-Headers: Content-Type\r\n"
+                f"Content-Length: {len(resp_body)}\r\n"
+                f"Connection: close\r\n\r\n"
+            ).encode() + resp_body
         writer.write(response)
         await writer.drain()
     except Exception as e:
