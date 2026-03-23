@@ -65,9 +65,10 @@ class StrapChannel:
         zone = calc_zone(hr, self.max_hr)
         pct  = round(hr / self.max_hr * 100)
 
-        # Kalórie — inkrementálne (1s intervaly)
+        # Kalórie + watty — inkrementálne (1s intervaly)
+        watts = 0
         if self.connected and self.weight_kg and self.birth_year:
-            from hr_utils import calc_calories
+            from hr_utils import calc_calories, calc_watts
             elapsed_min = (now - self.last_seen) / 60
             from datetime import datetime
             age = datetime.now().year - self.birth_year
@@ -77,6 +78,7 @@ class StrapChannel:
                 gender=self.gender or "M",
                 duration_min=elapsed_min,
             )
+            watts = calc_watts(hr, self.weight_kg, age=age, gender=self.gender or "M")
 
         self.connected = True
         self.last_seen = now
@@ -90,6 +92,7 @@ class StrapChannel:
             "pct":       pct,
             "zone":      zone,
             "calories":  round(self.total_calories),
+            "watts":     watts,
             "max_hr":    self.max_hr,
         })
 

@@ -68,6 +68,7 @@ function handleMessage(msg) {
         zone:      msg.zone,
         calories:  msg.calories,
         meps:      msg.meps,
+        watts:     msg.watts,
         battery:   msg.battery,
         connected: true,
       });
@@ -166,7 +167,8 @@ function cardHTML(pos, r) {
   const pct  = r.pct ?? 0;
   const hr   = r.hr  ?? "--";
   const cal  = r.calories ?? 0;
-  const meps = r.meps ?? 0;
+  const meps  = r.meps  ?? 0;
+  const watts = r.watts ?? 0;
   return `
     <div class="card-inner" style="background:${bg}">
       <div class="card-header">
@@ -176,6 +178,7 @@ function cardHTML(pos, r) {
       ${zoneHistoryHTML(r)}
       <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
       <div class="card-pct" ${(r.zone ?? 0) === 0 ? 'style="color:#e05050"' : ""}>${pct}%</div>
+      <div class="card-watts">⚡ ${watts} <span class="watts-label">W</span></div>
       <div class="card-footer">
         <span class="card-bpm">❤️ ${hr} bpm</span>
         <span class="card-pos">#${pos}</span>

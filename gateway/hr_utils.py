@@ -56,6 +56,31 @@ def calc_calories(hr: int, weight_kg: float, age: int,
     return round(max(0.0, cal_per_min * duration_min), 1)
 
 
+def calc_watts(hr: int, weight_kg: float, age: int, gender: str) -> int:
+    """
+    Odhad mechanického výkonu (W) z HR cez Keytel + cyklická efektivita 25%.
+    1 kcal/min = 69.78 W (metabolicky), × 0.25 = mechanické watty.
+    """
+    if not weight_kg:
+        return 0
+
+    if gender and gender.upper() == "F":
+        cal_per_min = (
+            (-20.4022 + (0.4472 * hr)
+             - (0.1263 * weight_kg)
+             + (0.074 * age)) / 4.184
+        )
+    else:
+        cal_per_min = (
+            (-55.0969 + (0.6309 * hr)
+             + (0.1988 * weight_kg)
+             + (0.2017 * age)) / 4.184
+        )
+
+    watts = max(0.0, cal_per_min) * 69.78 * 0.25
+    return round(watts)
+
+
 ZONE_COLORS = {
     0: "#2a2a2a",   # tmavosivá — pod 50%
     1: "#555555",   # sivá      — 50-59%
