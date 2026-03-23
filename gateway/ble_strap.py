@@ -33,6 +33,7 @@ class BleStrap:
         broadcast_fn,
         session_mgr=None,
         start_delay: float = 0.0,
+        connect_lock: asyncio.Lock | None = None,
     ):
         self.ble_address   = ble_address
         self.bike_position = bike_position
@@ -44,6 +45,7 @@ class BleStrap:
         self.broadcast_fn  = broadcast_fn
         self.session_mgr   = session_mgr
         self.start_delay   = start_delay
+        self.connect_lock  = connect_lock
 
         self.connected      = False
         self.last_seen      = 0.0
@@ -75,35 +77,44 @@ class BleStrap:
         if self.start_delay > 0:
             await asyncio.sleep(self.start_delay)
         while self._running:
+            client = BleakClient(self.ble_address, timeout=CONNECT_TIMEOUT)
             try:
                 logger.info(
                     f"Pripájam {self.ble_address} → "
                     f"pozícia {self.bike_position} ({self.rider_name})"
                 )
-                async with BleakClient(
-                    self.ble_address,
-                    timeout=CONNECT_TIMEOUT,
-                ) as client:
-                    await client.start_notify(HEART_RATE_UUID, self._on_hr_data)
-                    try:
-                        bat = await client.read_gatt_char(BATTERY_UUID)
-                        self.battery = round(bat[0] / 10) * 10  # zaokrúhli na 10%
-                    except Exception:
-                        self.battery = None
-                    logger.info(
-                        f"BLE spojené: {self.rider_name} ({self.ble_address})"
-                        + (f" — batéria {self.battery}%" if self.battery is not None else "")
-                    )
+                # Serializuj pokusy o pripojenie — BlueZ zvláda len jedno naraz
+                lock = self.connect_lock if self.connect_lock else asyncio.Lock()
+                async with lock:
+                    await client.connect()
 
-                    while client.is_connected and self._running:
-                        await asyncio.sleep(1)
+                # Lock uvoľnený — BlueZ môže spracovať ďalší pás
+                await client.start_notify(HEART_RATE_UUID, self._on_hr_data)
+                try:
+                    bat = await client.read_gatt_char(BATTERY_UUID)
+                    self.battery = round(bat[0] / 10) * 10  # zaokrúhli na 10%
+                except Exception:
+                    self.battery = None
+                logger.info(
+                    f"BLE spojené: {self.rider_name} ({self.ble_address})"
+                    + (f" — batéria {self.battery}%" if self.battery is not None else "")
+                )
+
+                while client.is_connected and self._running:
+                    await asyncio.sleep(1)
 
             except (BleakError, asyncio.TimeoutError) as e:
                 logger.warning(f"BLE chyba [{self.ble_address}]: {e}")
             except asyncio.CancelledError:
-                break
+                break   # finally zariadi disconnect
             except Exception as e:
                 logger.warning(f"Neočakávaná BLE chyba [{self.ble_address}]: {e}")
+            finally:
+                if client.is_connected:
+                    try:
+                        await client.disconnect()
+                    except Exception:
+                        pass
 
             if self.connected:
                 self.connected = False

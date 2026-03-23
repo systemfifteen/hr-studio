@@ -18,6 +18,7 @@ class BleManager:
         self.broadcast   = broadcast_fn
         self.session_mgr = session_mgr
         self.straps: dict[str, BleStrap] = {}   # ble_address → BleStrap
+        self._connect_lock = asyncio.Lock()      # BlueZ: len jedno pripojenie naraz
 
     def _load_rows(self) -> list:
         db = sqlite3.connect(self.cache_db)
@@ -55,6 +56,7 @@ class BleManager:
                 broadcast_fn  = self.broadcast,
                 session_mgr   = self.session_mgr,
                 start_delay   = idx * 2.0,
+                connect_lock  = self._connect_lock,
             )
             self.straps[ble_addr] = strap
             strap.start()
