@@ -171,16 +171,15 @@ function cardHTML(pos, r) {
     <div class="card-inner" style="background:${bg}">
       <div class="card-header">
         <span class="card-name">${r.name ?? `Bike ${pos}`}</span>
-        ${r.battery != null ? `<span class="card-bat-wrap">${batteryIcon(r.battery)}</span>` : ""}
+        <span class="card-cal">🔥 ${cal} kcal</span>
       </div>
       ${zoneHistoryHTML(r)}
       <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
       <div class="card-pct" ${(r.zone ?? 0) === 0 ? 'style="color:#e05050"' : ""}>${pct}%</div>
-      <div class="card-meps">${meps} <span class="meps-label">MEPs</span></div>
       <div class="card-footer">
         <span class="card-bpm">♥ ${hr} bpm</span>
-        <span class="card-cal">🔥 ${cal} kcal</span>
         <span class="card-pos">#${pos}</span>
+        <span class="card-meps">⛰️ ${meps} <span class="meps-label">MEPs</span></span>
       </div>
       ${r.connected === false ? '<div class="card-offline">signal lost</div>' : ""}
     </div>
