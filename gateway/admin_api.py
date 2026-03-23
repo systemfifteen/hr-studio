@@ -18,6 +18,20 @@ class AdminApi:
         self.manager      = manager
         self.broadcast_fn = broadcast_fn
         self.session_mgr  = session_mgr
+        self._ensure_catalog_table()
+
+    def _ensure_catalog_table(self):
+        db = self._db()
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS strap_catalog (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                label       TEXT NOT NULL,
+                ble_name    TEXT,
+                ble_address TEXT UNIQUE
+            )
+        """)
+        db.commit()
+        db.close()
 
     def _db(self):
         return sqlite3.connect(self.cache_db)
@@ -94,6 +108,21 @@ class AdminApi:
                 return 503, {"error": "session manager not ready"}
             return 200, self.session_mgr.list_sessions()
 
+        # Strap catalog
+        if method == "GET" and path == "/strap-catalog":
+            return 200, self._get_catalog()
+
+        if method == "POST" and path == "/strap-catalog":
+            return self._add_catalog(data)
+
+        if path.startswith("/strap-catalog/"):
+            try:
+                catalog_id = int(path.split("/")[2])
+            except (IndexError, ValueError):
+                return 400, {"error": "invalid id"}
+            if method == "DELETE":
+                return self._delete_catalog(catalog_id)
+
         # /bikes/{id}
         parts = path.split("/")
         if len(parts) >= 3 and parts[1] == "bikes":
@@ -115,6 +144,42 @@ class AdminApi:
         return 404, {"error": "not found"}
 
     # ── Handlers ──────────────────────────────────────────────────────────────
+
+    def _get_catalog(self):
+        db = self._db()
+        rows = db.execute(
+            "SELECT id, label, ble_name, ble_address FROM strap_catalog ORDER BY id"
+        ).fetchall()
+        db.close()
+        return [
+            {"id": r[0], "label": r[1], "ble_name": r[2], "ble_address": r[3]}
+            for r in rows
+        ]
+
+    def _add_catalog(self, data):
+        label       = (data.get("label") or "").strip()
+        ble_name    = (data.get("ble_name") or "").strip() or None
+        ble_address = (data.get("ble_address") or "").strip().upper() or None
+        if not label:
+            return 400, {"error": "label required"}
+        try:
+            db = self._db()
+            db.execute(
+                "INSERT INTO strap_catalog(label, ble_name, ble_address) VALUES(?,?,?)",
+                (label, ble_name, ble_address),
+            )
+            db.commit()
+            db.close()
+            return 201, {"ok": True}
+        except sqlite3.IntegrityError:
+            return 409, {"error": "ble_address already exists in catalog"}
+
+    def _delete_catalog(self, catalog_id):
+        db = self._db()
+        db.execute("DELETE FROM strap_catalog WHERE id=?", (catalog_id,))
+        db.commit()
+        db.close()
+        return 200, {"ok": True}
 
     def _network_status(self):
         import os
@@ -264,14 +329,32 @@ class AdminApi:
         return 200, {"ok": True}
 
     async def _assign_strap(self, bike_id, data):
-        addr = (data.get("ble_address") or "").strip().upper()
+        addr  = (data.get("ble_address") or "").strip().upper()
+        label = (data.get("label") or "").strip()
+
+        # If catalog_id provided, look up address (and label) from catalog
+        catalog_id = data.get("catalog_id")
+        if catalog_id is not None:
+            db = self._db()
+            row = db.execute(
+                "SELECT ble_address, label FROM strap_catalog WHERE id=?",
+                (int(catalog_id),),
+            ).fetchone()
+            db.close()
+            if not row:
+                return 404, {"error": "catalog entry not found"}
+            if not row[0]:
+                return 400, {"error": "catalog entry has no ble_address"}
+            addr  = row[0].upper()
+            label = label or row[1]
+
         if not addr:
             return 400, {"error": "ble_address required"}
         db = self._db()
         db.execute("DELETE FROM straps WHERE bike_id=?", (bike_id,))
         db.execute(
             "INSERT INTO straps(ble_address, bike_id, label) VALUES(?,?,?)",
-            (addr, bike_id, ""),
+            (addr, bike_id, label),
         )
         db.commit()
         db.close()
@@ -298,9 +381,25 @@ class AdminApi:
             timeout=SCAN_TIMEOUT,
             service_uuids=[HEART_RATE_SERVICE_UUID],
         )
-        result = [
-            {"name": d.name or "Unknown", "address": d.address, "rssi": d.rssi}
-            for d in sorted(devices, key=lambda x: -(x.rssi or -999))
-        ]
+
+        # Load catalog for enrichment
+        db = self._db()
+        catalog_rows = db.execute(
+            "SELECT label, ble_name, ble_address FROM strap_catalog"
+        ).fetchall()
+        db.close()
+        catalog_by_addr = {r[2].upper(): r[0] for r in catalog_rows if r[2]}
+        catalog_by_name = {r[1]: r[0] for r in catalog_rows if r[1]}
+
+        result = []
+        for d in sorted(devices, key=lambda x: -(x.rssi or -999)):
+            dev_name = d.name or "Unknown"
+            dev_addr = d.address.upper()
+            label = catalog_by_addr.get(dev_addr) or catalog_by_name.get(dev_name)
+            entry = {"name": dev_name, "address": dev_addr, "rssi": d.rssi}
+            if label:
+                entry["catalog_label"] = label
+            result.append(entry)
+
         logger.info(f"Scan hotový — {len(result)} HR zariadení")
         return 200, result
