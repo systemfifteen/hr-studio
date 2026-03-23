@@ -127,6 +127,7 @@ input[type=number]{width:80px}
   <header>
     <h1>HR Studio <span>Admin</span></h1>
     <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-secondary" onclick="fixHdmi()" title="Zapne HDMI výstup na TV (1920x1080 mirror)">📺 Fix HDMI</button>
       <button class="btn btn-secondary" onclick="reloadDashboard()" title="Pošle reload všetkým pripojeným dashboardom (TV, prehliadač...)">⟳ Reload TV</button>
       <a href="/">← Dashboard</a>
     </div>
@@ -1000,6 +1001,11 @@ function renderSessionDetail(riders) {
 }
 
 // ── Dashboard reload ───────────────────────────────────────────────────────
+async function fixHdmi() {
+  const r = await fetch(`${API}/fix-hdmi`, { method: 'POST' });
+  toast(r.ok ? 'HDMI aktivovaný' : 'HDMI chyba — skontroluj kábel', r.ok ? 'success' : 'error');
+}
+
 async function reloadDashboard() {
   await fetch(`${API}/dashboard-reload`, { method: 'POST' });
   toast('Dashboard reload odoslaný', 'success');

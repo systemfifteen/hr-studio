@@ -78,6 +78,9 @@ class AdminApi:
             await self.broadcast_fn({"type": "riders_updated"})
             return 200, {"ok": True}
 
+        if method == "POST" and path == "/fix-hdmi":
+            return await self._fix_hdmi()
+
         if method == "GET" and path == "/scan":
             return await self._scan()
 
@@ -491,6 +494,14 @@ class AdminApi:
         db.close()
         await self._reload()
         return 200, {"ok": True}
+
+    async def _fix_hdmi(self):
+        import urllib.request
+        try:
+            urllib.request.urlopen("http://127.0.0.1:8767/fix-hdmi", data=b"", timeout=5)
+            return 200, {"ok": True}
+        except Exception as e:
+            return 500, {"error": str(e)}
 
     async def _reload(self):
         if self.manager:
