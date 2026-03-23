@@ -233,6 +233,29 @@ input[type=number]{width:80px}
     </div>
   </section>
 
+  <!-- Rider catalog -->
+  <section>
+    <h2>Katalóg jazdcov <span class="badge warn" id="rcatalog-count">0</span></h2>
+    <table class="tbl" id="rcatalog-table">
+      <thead>
+        <tr>
+          <th>Meno</th>
+          <th>Ročník</th>
+          <th>Váha</th>
+          <th>Pohlavie</th>
+          <th>Max HR</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rcatalog-tbody">
+        <tr><td colspan="6" class="empty">Načítavam...</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:12px">
+      <button class="btn btn-secondary" onclick="showAddRiderCatalog()">+ Pridať jazdca</button>
+    </div>
+  </section>
+
   <!-- BLE scanner -->
   <section>
     <h2>BLE skener — nájdi pásy</h2>
@@ -302,6 +325,12 @@ input[type=number]{width:80px}
 <div id="rider-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100">
   <div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:24px;width:380px;max-width:95vw">
     <h3 style="font-size:16px;margin-bottom:16px">Rider — bicykel <span id="r-bike-label"></span></h3>
+    <div class="form-row" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #222">
+      <label>Z katalógu</label>
+      <select id="r-catalog-select" onchange="onRiderCatalogSelect()" style="width:220px">
+        <option value="">— zadaj ručne —</option>
+      </select>
+    </div>
     <div class="form-row"><label>Meno</label><input type="text" id="r-name" placeholder="Meno ridera"></div>
     <div class="form-row"><label>Rok narodenia</label><input type="number" id="r-birth-year" placeholder="napr. 1990" style="width:100px"></div>
     <div class="form-row"><label>Váha (kg)</label><input type="number" id="r-weight" placeholder="napr. 75" style="width:100px" step="0.5"></div>
@@ -317,6 +346,30 @@ input[type=number]{width:80px}
       <button class="btn btn-danger btn-small" id="r-delete-btn" onclick="deleteRider()">Zmazať</button>
       <button class="btn btn-secondary" onclick="closeRiderModal()">Zrušiť</button>
       <button class="btn btn-primary" onclick="saveRider()">Uložiť</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: rider catalog -->
+<div id="rcatalog-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100">
+  <div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:24px;width:380px;max-width:95vw">
+    <h3 style="font-size:16px;margin-bottom:16px" id="rcm-title">Jazdec v katalógu</h3>
+    <div class="form-row"><label>Meno</label><input type="text" id="rcm-name" placeholder="Meno"></div>
+    <div class="form-row"><label>Rok nar.</label><input type="number" id="rcm-birth-year" placeholder="napr. 1985" style="width:100px"></div>
+    <div class="form-row"><label>Váha (kg)</label><input type="number" id="rcm-weight" placeholder="napr. 70" style="width:100px" step="0.5"></div>
+    <div class="form-row">
+      <label>Pohlavie</label>
+      <select id="rcm-gender"><option value="M">Muž</option><option value="F">Žena</option></select>
+    </div>
+    <div class="form-row">
+      <label>Max HR</label>
+      <input type="number" id="rcm-max-hr" placeholder="auto" style="width:80px">
+      <span style="font-size:11px;color:#666;margin-left:6px">prázdne = Tanaka</span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px">
+      <button class="btn btn-danger btn-small" id="rcm-delete-btn" onclick="deleteRiderCatalog()" style="display:none">Zmazať</button>
+      <button class="btn btn-secondary" onclick="closeRcModal()">Zrušiť</button>
+      <button class="btn btn-primary" onclick="saveRcModal()">Uložiť</button>
     </div>
   </div>
 </div>
@@ -943,12 +996,135 @@ function renderSessionDetail(riders) {
   }).join('');
 }
 
+// ── Rider catalog ──────────────────────────────────────────────────────────
+let riderCatalog = [];
+let rcEditId = null;
+
+function calcMaxHr(birthYear, gender) {
+  const age = new Date().getFullYear() - birthYear;
+  return Math.round(gender === 'F' ? 206 - 0.88 * age : 208 - 0.7 * age);
+}
+
+async function loadRiderCatalog() {
+  try {
+    const r = await fetch(`${API}/rider-catalog`);
+    riderCatalog = await r.json();
+    renderRiderCatalog();
+    updateRiderCatalogSelect();
+  } catch(e) {
+    document.getElementById('rcatalog-tbody').innerHTML =
+      '<tr><td colspan="6" class="empty">Chyba načítania</td></tr>';
+  }
+}
+
+function renderRiderCatalog() {
+  document.getElementById('rcatalog-count').textContent = riderCatalog.length;
+  const tbody = document.getElementById('rcatalog-tbody');
+  if (!riderCatalog.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Katalóg je prázdny — klikni "Pridať jazdca"</td></tr>';
+    return;
+  }
+  const yr = new Date().getFullYear();
+  tbody.innerHTML = riderCatalog.map(r => {
+    const age   = yr - r.birth_year;
+    const maxHr = r.max_hr_override || calcMaxHr(r.birth_year, r.gender);
+    return `<tr>
+      <td><strong>${r.name}</strong></td>
+      <td>${r.birth_year} <span style="color:#666;font-size:11px">(${age}r)</span></td>
+      <td>${r.weight_kg != null ? r.weight_kg + ' kg' : '—'}</td>
+      <td>${r.gender === 'F' ? 'Žena' : 'Muž'}</td>
+      <td>${maxHr}</td>
+      <td style="text-align:right">
+        <button class="btn btn-secondary btn-small" onclick='editRiderCatalog(${JSON.stringify(r)})'>Upraviť</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function updateRiderCatalogSelect() {
+  const sel = document.getElementById('r-catalog-select');
+  sel.innerHTML = '<option value="">— zadaj ručne —</option>' +
+    riderCatalog.map(r => `<option value="${r.id}">${r.name} (${r.birth_year})</option>`).join('');
+}
+
+function onRiderCatalogSelect() {
+  const id = parseInt(document.getElementById('r-catalog-select').value);
+  if (!id) return;
+  const r = riderCatalog.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('r-name').value       = r.name;
+  document.getElementById('r-birth-year').value = r.birth_year;
+  document.getElementById('r-weight').value     = r.weight_kg || '';
+  document.getElementById('r-gender').value     = r.gender;
+}
+
+function showAddRiderCatalog() {
+  rcEditId = null;
+  document.getElementById('rcm-title').textContent = 'Pridať jazdca do katalógu';
+  document.getElementById('rcm-name').value       = '';
+  document.getElementById('rcm-birth-year').value = '';
+  document.getElementById('rcm-weight').value     = '';
+  document.getElementById('rcm-gender').value     = 'M';
+  document.getElementById('rcm-max-hr').value     = '';
+  document.getElementById('rcm-delete-btn').style.display = 'none';
+  document.getElementById('rcatalog-modal-overlay').style.display = 'flex';
+}
+
+function editRiderCatalog(r) {
+  rcEditId = r.id;
+  document.getElementById('rcm-title').textContent = 'Upraviť jazdca';
+  document.getElementById('rcm-name').value        = r.name;
+  document.getElementById('rcm-birth-year').value  = r.birth_year;
+  document.getElementById('rcm-weight').value      = r.weight_kg || '';
+  document.getElementById('rcm-gender').value      = r.gender;
+  document.getElementById('rcm-max-hr').value      = r.max_hr_override || '';
+  document.getElementById('rcm-delete-btn').style.display = 'inline-block';
+  document.getElementById('rcatalog-modal-overlay').style.display = 'flex';
+}
+
+function closeRcModal() {
+  document.getElementById('rcatalog-modal-overlay').style.display = 'none';
+  rcEditId = null;
+}
+
+async function saveRcModal() {
+  const name       = document.getElementById('rcm-name').value.trim();
+  const birth_year = parseInt(document.getElementById('rcm-birth-year').value);
+  const weight_kg  = parseFloat(document.getElementById('rcm-weight').value) || null;
+  const gender     = document.getElementById('rcm-gender').value;
+  const max_hr_override = parseInt(document.getElementById('rcm-max-hr').value) || null;
+  if (!name || !birth_year) { toast('Meno a rok narodenia sú povinné', 'error'); return; }
+  const url    = rcEditId ? `${API}/rider-catalog/${rcEditId}` : `${API}/rider-catalog`;
+  const method = rcEditId ? 'PUT' : 'POST';
+  const r = await fetch(url, {
+    method,
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name, birth_year, weight_kg, gender, max_hr_override }),
+  });
+  if (r.ok) {
+    toast(rcEditId ? 'Aktualizované' : 'Jazdec pridaný', 'success');
+    closeRcModal();
+    loadRiderCatalog();
+  } else {
+    toast('Chyba uloženia', 'error');
+  }
+}
+
+async function deleteRiderCatalog() {
+  if (!confirm('Zmazať jazdca z katalógu?')) return;
+  await fetch(`${API}/rider-catalog/${rcEditId}`, { method: 'DELETE' });
+  toast('Zmazaný');
+  closeRcModal();
+  loadRiderCatalog();
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 loadStatus();
 loadBikes();
 loadSession();
 loadStrapStatus();
 loadStrapCatalog();
+loadRiderCatalog();
 loadSessions();
 setInterval(loadStatus, 30000);
 setInterval(loadStrapStatus, 3000);

@@ -30,6 +30,16 @@ class AdminApi:
                 ble_address TEXT UNIQUE
             )
         """)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS riders_catalog (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                name            TEXT NOT NULL,
+                birth_year      INTEGER NOT NULL,
+                weight_kg       REAL,
+                gender          TEXT NOT NULL DEFAULT 'M',
+                max_hr_override INTEGER
+            )
+        """)
         db.commit()
         db.close()
 
@@ -144,6 +154,23 @@ class AdminApi:
             if method == "DELETE":
                 return self._delete_catalog(catalog_id)
 
+        # Rider catalog
+        if method == "GET" and path == "/rider-catalog":
+            return 200, self._get_rider_catalog()
+
+        if method == "POST" and path == "/rider-catalog":
+            return self._add_rider_catalog(data)
+
+        if path.startswith("/rider-catalog/"):
+            try:
+                rc_id = int(path.split("/")[2])
+            except (IndexError, ValueError):
+                return 400, {"error": "invalid id"}
+            if method == "PUT":
+                return self._update_rider_catalog(rc_id, data)
+            if method == "DELETE":
+                return self._delete_rider_catalog(rc_id)
+
         # /bikes/{id}
         parts = path.split("/")
         if len(parts) >= 3 and parts[1] == "bikes":
@@ -198,6 +225,64 @@ class AdminApi:
     def _delete_catalog(self, catalog_id):
         db = self._db()
         db.execute("DELETE FROM strap_catalog WHERE id=?", (catalog_id,))
+        db.commit()
+        db.close()
+        return 200, {"ok": True}
+
+    # ── Rider catalog ──────────────────────────────────────────────────────────
+
+    def _get_rider_catalog(self):
+        db = self._db()
+        rows = db.execute(
+            "SELECT id, name, birth_year, weight_kg, gender, max_hr_override "
+            "FROM riders_catalog ORDER BY name"
+        ).fetchall()
+        db.close()
+        return [
+            {"id": r[0], "name": r[1], "birth_year": r[2],
+             "weight_kg": r[3], "gender": r[4], "max_hr_override": r[5]}
+            for r in rows
+        ]
+
+    def _add_rider_catalog(self, data):
+        name       = (data.get("name") or "").strip()
+        birth_year = data.get("birth_year")
+        weight_kg  = data.get("weight_kg") or None
+        gender     = (data.get("gender") or "M").upper()
+        max_hr_override = data.get("max_hr_override") or None
+        if not name or not birth_year:
+            return 400, {"error": "name and birth_year required"}
+        db = self._db()
+        db.execute(
+            "INSERT INTO riders_catalog(name, birth_year, weight_kg, gender, max_hr_override) "
+            "VALUES(?,?,?,?,?)",
+            (name, int(birth_year), weight_kg, gender, max_hr_override),
+        )
+        db.commit()
+        db.close()
+        return 201, {"ok": True}
+
+    def _update_rider_catalog(self, rc_id, data):
+        name       = (data.get("name") or "").strip()
+        birth_year = data.get("birth_year")
+        weight_kg  = data.get("weight_kg") or None
+        gender     = (data.get("gender") or "M").upper()
+        max_hr_override = data.get("max_hr_override") or None
+        if not name or not birth_year:
+            return 400, {"error": "name and birth_year required"}
+        db = self._db()
+        db.execute(
+            "UPDATE riders_catalog SET name=?, birth_year=?, weight_kg=?, "
+            "gender=?, max_hr_override=? WHERE id=?",
+            (name, int(birth_year), weight_kg, gender, max_hr_override, rc_id),
+        )
+        db.commit()
+        db.close()
+        return 200, {"ok": True}
+
+    def _delete_rider_catalog(self, rc_id):
+        db = self._db()
+        db.execute("DELETE FROM riders_catalog WHERE id=?", (rc_id,))
         db.commit()
         db.close()
         return 200, {"ok": True}
@@ -266,15 +351,28 @@ class AdminApi:
         ]
 
     async def _upsert_rider(self, position: int, data: dict):
-        name       = (data.get("name") or "").strip()
-        birth_year = data.get("birth_year")
-        weight_kg  = data.get("weight_kg")
-        gender     = (data.get("gender") or "M").upper()
-        if not name:
-            return 400, {"error": "name required"}
-        if not birth_year:
-            return 400, {"error": "birth_year required"}
-        max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender)
+        catalog_id = data.get("catalog_id")
+        if catalog_id is not None:
+            db = self._db()
+            row = db.execute(
+                "SELECT name, birth_year, weight_kg, gender, max_hr_override "
+                "FROM riders_catalog WHERE id=?", (int(catalog_id),)
+            ).fetchone()
+            db.close()
+            if not row:
+                return 404, {"error": "catalog entry not found"}
+            name, birth_year, weight_kg, gender, max_hr_override = row
+            max_hr = max_hr_override or calc_max_hr(int(birth_year), gender)
+        else:
+            name       = (data.get("name") or "").strip()
+            birth_year = data.get("birth_year")
+            weight_kg  = data.get("weight_kg")
+            gender     = (data.get("gender") or "M").upper()
+            if not name:
+                return 400, {"error": "name required"}
+            if not birth_year:
+                return 400, {"error": "birth_year required"}
+            max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender)
         db = self._db()
         db.execute("""
             INSERT INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender)

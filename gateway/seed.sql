@@ -70,4 +70,20 @@ CREATE TABLE IF NOT EXISTS strap_catalog (
     ble_address TEXT UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS riders_catalog (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    birth_year      INTEGER NOT NULL,
+    weight_kg       REAL,
+    gender          TEXT NOT NULL DEFAULT 'M',
+    max_hr_override INTEGER
+);
+
+-- Stáli jazdci
+INSERT OR IGNORE INTO riders_catalog(id, name, birth_year, weight_kg, gender) VALUES
+    (1, 'rusinka', 1972, 85.0, 'M'),
+    (2, 'PP',      1973, 89.0, 'M'),
+    (3, 'Sona',    1985, 60.0, 'F'),
+    (4, '15',      1978, 115.0, 'M');
+
 COMMIT;
