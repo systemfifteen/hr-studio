@@ -38,9 +38,12 @@ CREATE TABLE IF NOT EXISTS straps (
     label TEXT
 );
 
--- MZ-1 testovací pás priradený k bicyklu #1 (label "2")
-INSERT OR IGNORE INTO straps(id, ble_address, bike_id, label)
-    VALUES(1, 'D1:6E:D6:44:13:15', 1, 'MZ-1');
+-- BLE pásy priradené k bicyklom
+INSERT OR IGNORE INTO straps(id, ble_address, bike_id, label) VALUES
+    (2, 'D3:B3:0B:C7:0A:88',  7, ''),
+    (3, 'E2:17:78:4D:F5:48', 13, ''),
+    (4, 'EE:9C:B9:BD:20:AD',  1, ''),
+    (5, 'D1:6E:D6:44:13:15', 15, 'D1:6E:D6:44:13:15');
 
 CREATE TABLE IF NOT EXISTS riders_cache (
     bike_position INTEGER PRIMARY KEY,
@@ -53,7 +56,18 @@ CREATE TABLE IF NOT EXISTS riders_cache (
     synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT OR IGNORE INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender)
-    VALUES(1, 'Peter', 185, 80.0, 1985, 'M');
+-- Jazdci priradení k bicyklom
+INSERT OR IGNORE INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender) VALUES
+    ( 1, 'rusinka', 170, 85.0, 1972, 'M'),
+    ( 7, 'PP',      171, 89.0, 1973, 'M'),
+    (13, 'Sona',    170, 60.0, 1985, 'F'),
+    (15, '15',      174, 115.0, 1978, 'M');
+
+CREATE TABLE IF NOT EXISTS strap_catalog (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    label       TEXT NOT NULL,
+    ble_name    TEXT,
+    ble_address TEXT UNIQUE
+);
 
 COMMIT;
