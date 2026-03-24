@@ -533,19 +533,37 @@ class AdminApi:
         catalog_rows = db.execute(
             "SELECT label, ble_name, ble_address FROM strap_catalog"
         ).fetchall()
-        db.close()
         catalog_by_addr = {r[2].upper(): r[0] for r in catalog_rows if r[2]}
         catalog_by_name = {r[1]: r[0] for r in catalog_rows if r[1]}
 
+        auto_added = 0
         result = []
         for d in sorted(devices, key=lambda x: -(x.rssi or -999)):
             dev_name = d.name or "Unknown"
             dev_addr = d.address.upper()
             label = catalog_by_addr.get(dev_addr) or catalog_by_name.get(dev_name)
-            entry = {"name": dev_name, "address": dev_addr, "rssi": d.rssi}
+            entry = {"name": dev_name, "address": dev_addr, "rssi": d.rssi,
+                     "auto_added": False}
             if label:
                 entry["catalog_label"] = label
+            elif dev_name.upper().startswith("MYZONE-"):
+                # Auto-register: label = last 6 digits of device name
+                short = dev_name.split("-")[-1][-6:]
+                try:
+                    db.execute(
+                        "INSERT INTO strap_catalog(label, ble_name, ble_address) "
+                        "VALUES(?,?,?)",
+                        (short, dev_name, dev_addr),
+                    )
+                    db.commit()
+                    entry["catalog_label"] = short
+                    entry["auto_added"] = True
+                    auto_added += 1
+                    logger.info(f"Auto-pridaný pás do katalógu: {dev_name} ({dev_addr}) → label {short}")
+                except Exception:
+                    pass  # už existuje alebo iná chyba
             result.append(entry)
 
-        logger.info(f"Scan hotový — {len(result)} HR zariadení")
+        db.close()
+        logger.info(f"Scan hotový — {len(result)} HR zariadení, {auto_added} nových v katalógu")
         return 200, result
