@@ -145,6 +145,18 @@ class AdminApi:
                 if not self.session_mgr:
                     return 503, {"error": "session manager not ready"}
                 return 200, {"__csv__": self.session_mgr.export_csv(sid), "session_id": sid}
+            if (method == "GET" and len(parts) == 6
+                    and parts[3] == "riders" and parts[5] == "export.fit"):
+                try:
+                    pos = int(parts[4])
+                except ValueError:
+                    return 400, {"error": "invalid position"}
+                if not self.session_mgr:
+                    return 503, {"error": "session manager not ready"}
+                filename, fit_bytes = self.session_mgr.export_fit(sid, pos)
+                if fit_bytes is None:
+                    return 404, {"error": "no data for this rider/session"}
+                return 200, {"__fit__": fit_bytes, "filename": filename}
 
         # Strap catalog
         if method == "GET" and path == "/strap-catalog":

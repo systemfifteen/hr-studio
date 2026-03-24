@@ -229,6 +229,56 @@ class SessionManager:
         db.close()
         return result
 
+    def export_fit(self, session_id: int, bike_position: int) -> tuple:
+        """Vráti (filename, bytes) FIT súboru pre jedného jazdca."""
+        db = self._db()
+        sess_row = db.execute(
+            "SELECT label, started_at, ended_at FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not sess_row:
+            db.close()
+            return None, None
+
+        rider_row = db.execute(
+            "SELECT name, birth_year, weight_kg, gender, max_hr "
+            "FROM riders_cache WHERE bike_position=?",
+            (bike_position,),
+        ).fetchone()
+
+        records = db.execute(
+            "SELECT ts, hr, cal_inc, watts FROM session_data "
+            "WHERE session_id=? AND bike_position=? ORDER BY ts",
+            (session_id, bike_position),
+        ).fetchall()
+        db.close()
+
+        if not records:
+            return None, None
+
+        from fit_export import build_fit
+        session_info = {
+            "started_at": sess_row[1],
+            "ended_at":   sess_row[2],
+            "label":      sess_row[0],
+        }
+        rider_info = {
+            "name":       rider_row[0] if rider_row else f"Bike {bike_position}",
+            "birth_year": rider_row[1] if rider_row else None,
+            "weight_kg":  rider_row[2] if rider_row else None,
+            "gender":     rider_row[3] if rider_row else "M",
+            "max_hr":     rider_row[4] if rider_row else None,
+        }
+        rec_dicts = [
+            {"ts": r[0], "hr": r[1], "cal_inc": r[2] or 0, "watts": r[3] or 0}
+            for r in records
+        ]
+
+        fit_bytes = build_fit(session_info, rider_info, rec_dicts)
+        name = rider_info["name"].replace(" ", "_")
+        filename = f"session_{session_id}_{name}.fit"
+        return filename, fit_bytes
+
     def export_csv(self, session_id: int) -> str:
         db  = self._db()
         row = db.execute(

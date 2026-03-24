@@ -101,8 +101,20 @@ async def http_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
         status_text = {200: "OK", 201: "Created", 204: "No Content",
                        400: "Bad Request", 404: "Not Found", 409: "Conflict"}.get(status, "OK")
 
+        # FIT export — binárna odpoveď
+        if isinstance(result, dict) and "__fit__" in result:
+            fit_data = result["__fit__"]
+            filename = result["filename"]
+            response = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Content-Type: application/octet-stream\r\n"
+                f"Content-Disposition: attachment; filename=\"{filename}\"\r\n"
+                f"Access-Control-Allow-Origin: *\r\n"
+                f"Content-Length: {len(fit_data)}\r\n"
+                f"Connection: close\r\n\r\n"
+            ).encode() + fit_data
         # CSV export — špeciálna odpoveď
-        if isinstance(result, dict) and "__csv__" in result:
+        elif isinstance(result, dict) and "__csv__" in result:
             csv_data   = result["__csv__"].encode()
             filename   = f"session_{result['session_id']}.csv"
             response = (

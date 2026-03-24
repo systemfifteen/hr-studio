@@ -928,14 +928,14 @@ async function openSessionDetail(sessionId, label, startedAt, endedAt) {
     const r = await fetch(`${API}/sessions/${sessionId}/summary`);
     if (!r.ok) throw new Error(r.status);
     const riders = await r.json();
-    renderSessionDetail(riders);
+    renderSessionDetail(riders, sessionId);
   } catch(e) {
     document.getElementById('sd-content').innerHTML =
       '<div style="color:#e06060;padding:8px 0">Chyba načítania detailu session</div>';
   }
 }
 
-function renderSessionDetail(riders) {
+function renderSessionDetail(riders, sessionId) {
   if (!riders.length) {
     document.getElementById('sd-content').innerHTML =
       '<div class="empty">Žiadne dáta pre túto session</div>';
@@ -964,9 +964,14 @@ function renderSessionDetail(riders) {
       return `<span class="zl-${z}">${zoneNames[z]}: ${Math.round(sec/60)} min</span>`;
     }).filter(Boolean).join('');
 
+    const fitUrl = `${API}/sessions/${sessionId}/riders/${rider.bike_position}/export.fit`;
+
     return `
       <div class="rider-card">
-        <div class="rc-name">${rider.name || '—'}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="rc-name" style="margin-bottom:0">${rider.name || '—'}</div>
+          <a class="btn btn-secondary btn-small" href="${fitUrl}" target="_blank" title="Stiahnuť FIT súbor pre Garmin/Strava" style="display:inline-flex;align-items:center;gap:4px">⬇ FIT</a>
+        </div>
         <div class="rc-stats">
           <div class="rc-stat">
             <span class="rc-slabel">Trvanie</span>
