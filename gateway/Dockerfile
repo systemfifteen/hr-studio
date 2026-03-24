@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Seed DB ak ešte neexistuje
+# Seed DB — CREATE TABLE IF NOT EXISTS + INSERT OR IGNORE, bezpečné pri každom štarte
 COPY seed.sql /app/seed.sql
-CMD ["sh", "-c", "[ ! -f /data/local_cache.db ] && sqlite3 /data/local_cache.db < /app/seed.sql; python main.py"]
+CMD ["sh", "-c", "sqlite3 /data/local_cache.db < /app/seed.sql; python main.py"]
