@@ -105,6 +105,14 @@ while true; do
             "${DASHBOARD_URL}/admin.html" &
     fi
 done &
+
+# HDMI hotplug watcher — aktivuje TV automaticky keď sa pripojí
+(while true; do
+    if xrandr 2>/dev/null | grep -q "^HDMI-1 connected"; then
+        xrandr --output HDMI-1 --mode 1920x1080 --same-as eDP-1 2>/dev/null
+    fi
+    sleep 4
+done) &
 EOF
 
 chmod +x "${OPENBOX_DIR}/autostart"
