@@ -2,6 +2,7 @@ services:
   gateway:
     build: ./gateway
     restart: unless-stopped
+    network_mode: host
     volumes:
       - /run/dbus:/run/dbus
       - hr_data:/data
@@ -16,6 +17,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    extra_hosts:
+      - gateway:host-gateway
     depends_on:
       - gateway
 
