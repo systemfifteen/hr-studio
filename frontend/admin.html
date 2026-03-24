@@ -521,6 +521,7 @@ function renderCatalog() {
       <td style="color:#888;font-size:12px">${c.ble_name || '—'}</td>
       <td class="ble-addr">${c.ble_address || '—'}</td>
       <td style="text-align:right">
+        <button class="btn btn-small" onclick="openEditCatalog(${c.id})">✏ Edit</button>
         <button class="btn btn-danger btn-small" onclick="deleteCatalogEntry(${c.id})">✕ Zmazať</button>
       </td>
     </tr>
@@ -1148,6 +1149,59 @@ loadRiderCatalog();
 loadSessions();
 setInterval(loadStatus, 30000);
 setInterval(loadStrapStatus, 3000);
+
+// ── Edit strap catalog ──────────────────────────────────────────────────────
+let _editCatalogId = null;
+
+function openEditCatalog(id) {
+  const c = catalog.find(x => x.id === id);
+  if (!c) return;
+  _editCatalogId = id;
+  document.getElementById('ec-label').value       = c.label || '';
+  document.getElementById('ec-ble-name').value    = c.ble_name || '';
+  document.getElementById('ec-ble-address').value = c.ble_address || '';
+  document.getElementById('ec-modal').style.display = 'flex';
+}
+
+function closeEditCatalog() {
+  document.getElementById('ec-modal').style.display = 'none';
+  _editCatalogId = null;
+}
+
+async function saveEditCatalog() {
+  if (!_editCatalogId) return;
+  const label       = document.getElementById('ec-label').value.trim();
+  const ble_name    = document.getElementById('ec-ble-name').value.trim() || null;
+  const ble_address = document.getElementById('ec-ble-address').value.trim() || null;
+  if (!label) { toast('Label je povinný', 'error'); return; }
+  const r = await fetch(`${API}/strap-catalog/${_editCatalogId}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ label, ble_name, ble_address }),
+  });
+  if (r.ok) {
+    toast('Pás aktualizovaný', 'success');
+    closeEditCatalog();
+    loadStrapCatalog();
+  } else {
+    const e = await r.json().catch(() => ({}));
+    toast(e.error || 'Chyba uloženia', 'error');
+  }
+}
 </script>
+
+<!-- Modal: edit strap catalog -->
+<div id="ec-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100">
+  <div style="background:#1a2530;border:1px solid #2a4060;border-radius:10px;padding:24px;width:340px">
+    <h3 style="font-size:16px;margin-bottom:16px">Upraviť pás</h3>
+    <div class="form-row"><label>Label (nálepka)</label><input id="ec-label" placeholder="napr. 1"></div>
+    <div class="form-row"><label>BLE meno</label><input id="ec-ble-name" placeholder="napr. MYZONE-0003222279"></div>
+    <div class="form-row"><label>MAC adresa</label><input id="ec-ble-address" placeholder="napr. D1:6E:D6:44:13:15"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn" onclick="saveEditCatalog()" style="flex:1">Uložiť</button>
+      <button class="btn btn-danger" onclick="closeEditCatalog()" style="flex:1">Zrušiť</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

@@ -170,6 +170,8 @@ class AdminApi:
                 catalog_id = int(path.split("/")[2])
             except (IndexError, ValueError):
                 return 400, {"error": "invalid id"}
+            if method == "PUT":
+                return self._update_catalog(catalog_id, data)
             if method == "DELETE":
                 return self._delete_catalog(catalog_id)
 
@@ -240,6 +242,24 @@ class AdminApi:
             return 201, {"ok": True}
         except sqlite3.IntegrityError:
             return 409, {"error": "ble_address already exists in catalog"}
+
+    def _update_catalog(self, catalog_id, data):
+        label       = (data.get("label") or "").strip()
+        ble_name    = (data.get("ble_name") or "").strip() or None
+        ble_address = (data.get("ble_address") or "").strip().upper() or None
+        if not label:
+            return 400, {"error": "label required"}
+        try:
+            db = self._db()
+            db.execute(
+                "UPDATE strap_catalog SET label=?, ble_name=?, ble_address=? WHERE id=?",
+                (label, ble_name, ble_address, catalog_id),
+            )
+            db.commit()
+            db.close()
+            return 200, {"ok": True}
+        except sqlite3.IntegrityError:
+            return 409, {"error": "ble_address already exists"}
 
     def _delete_catalog(self, catalog_id):
         db = self._db()
@@ -555,21 +575,38 @@ class AdminApi:
             if label:
                 entry["catalog_label"] = label
             elif dev_name.upper().startswith("MYZONE-"):
-                # Auto-register: label = last 6 digits of device name
-                short = dev_name.split("-")[-1][-6:]
-                try:
+                # Skontroluj či existuje záznam s rovnakým ble_name (ale bez MAC)
+                existing = db.execute(
+                    "SELECT id, label FROM strap_catalog WHERE ble_name=?",
+                    (dev_name,),
+                ).fetchone()
+                if existing:
+                    # Doplní iba MAC adresu
                     db.execute(
-                        "INSERT INTO strap_catalog(label, ble_name, ble_address) "
-                        "VALUES(?,?,?)",
-                        (short, dev_name, dev_addr),
+                        "UPDATE strap_catalog SET ble_address=? WHERE id=?",
+                        (dev_addr, existing[0]),
                     )
                     db.commit()
-                    entry["catalog_label"] = short
-                    entry["auto_added"] = True
-                    auto_added += 1
-                    logger.info(f"Auto-pridaný pás do katalógu: {dev_name} ({dev_addr}) → label {short}")
-                except Exception:
-                    pass  # už existuje alebo iná chyba
+                    entry["catalog_label"] = existing[1]
+                    entry["auto_added"] = False
+                    entry["mac_filled"] = True
+                    logger.info(f"Doplnená MAC pre {dev_name} ({dev_addr}) → label {existing[1]}")
+                else:
+                    # Nový pás — pridaj s krátkym labelom ako placeholder
+                    short = dev_name.split("-")[-1][-6:]
+                    try:
+                        db.execute(
+                            "INSERT INTO strap_catalog(label, ble_name, ble_address) "
+                            "VALUES(?,?,?)",
+                            (short, dev_name, dev_addr),
+                        )
+                        db.commit()
+                        entry["catalog_label"] = short
+                        entry["auto_added"] = True
+                        auto_added += 1
+                        logger.info(f"Auto-pridaný nový pás: {dev_name} ({dev_addr}) → label {short}")
+                    except Exception:
+                        pass  # už existuje alebo iná chyba
             result.append(entry)
 
         db.close()
