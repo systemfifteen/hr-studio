@@ -178,9 +178,8 @@ function cardHTML(pos, r) {
       <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
       <div class="card-pct" ${(r.zone ?? 0) === 0 ? 'style="color:#e05050"' : ""}>${pct}%</div>
       <div class="card-footer">
-        <span class="card-bpm">❤️ ${hr} bpm</span>
-        <span class="card-pos">🚲 ${r.bike_label ?? pos}</span>
-        <span class="card-meps">⛰️ ${meps} <span class="meps-label">MEPs</span></span>
+        <span class="card-bpm">❤️ ${hr}</span>
+        <span class="card-meps">⛰️ ${meps}</span>
       </div>
       ${r.connected === false ? '<div class="card-offline">signal lost</div>' : ""}
     </div>
