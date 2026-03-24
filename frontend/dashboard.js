@@ -175,8 +175,7 @@ function cardHTML(pos, r) {
         <span class="card-cal">🔥 ${cal} kcal</span>
       </div>
       ${zoneHistoryHTML(r)}
-      <div class="zone-bar"><div class="zone-fill" style="width:${pct}%"></div></div>
-      <div class="card-pct" ${(r.zone ?? 0) === 0 ? 'style="color:#e05050"' : ""}>${pct}%</div>
+      <div class="card-pct" style="text-align:center${(r.zone ?? 0) === 0 ? ';color:#e05050' : ''}">${pct}%</div>
       <div class="card-footer">
         <span class="card-bpm">❤️ ${hr}</span>
         <span class="card-meps">⛰️ ${meps}</span>
