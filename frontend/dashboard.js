@@ -54,7 +54,7 @@ function handleMessage(msg) {
   switch (msg.type) {
     case "initial_state":
       msg.riders.forEach((r) => {
-        riders[r.position] = { ...r, pct: 0, zone: 0, calories: 0 };
+        riders[r.position] = { ...r, pct: 0, zone: 0, calories: 0, bike_label: r.bike_label };
       });
       renderGrid();
       break;
@@ -181,7 +181,7 @@ function cardHTML(pos, r) {
       <div class="card-watts">⚡ ~${watts} <span class="watts-label">W</span></div>
       <div class="card-footer">
         <span class="card-bpm">❤️ ${hr} bpm</span>
-        <span class="card-pos">#${pos}</span>
+        <span class="card-pos">🚲 ${r.bike_label ?? pos}</span>
         <span class="card-meps">⛰️ ${meps} <span class="meps-label">MEPs</span></span>
       </div>
       ${r.connected === false ? '<div class="card-offline">signal lost</div>' : ""}

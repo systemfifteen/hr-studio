@@ -25,6 +25,7 @@ class BleManager:
         rows = db.execute("""
             SELECT s.ble_address,
                    b.position,
+                   b.label,
                    r.name,
                    r.max_hr,
                    r.weight_kg,
@@ -44,10 +45,11 @@ class BleManager:
             logger.warning("Žiadni riders v cache alebo žiadne BLE adresy — čakám na admin setup")
             return
 
-        for idx, (ble_addr, position, name, max_hr, weight_kg, birth_year, gender) in enumerate(rows):
+        for idx, (ble_addr, position, bike_label, name, max_hr, weight_kg, birth_year, gender) in enumerate(rows):
             strap = BleStrap(
                 ble_address   = ble_addr,
                 bike_position = position,
+                bike_label    = bike_label,
                 rider_name    = name,
                 max_hr        = max_hr,
                 weight_kg     = weight_kg,
@@ -75,6 +77,7 @@ class BleManager:
         return [
             {
                 "position":    s.bike_position,
+                "bike_label":  s.bike_label,
                 "name":        s.rider_name,
                 "connected":   s.connected,
                 "hr":          s.last_hr,

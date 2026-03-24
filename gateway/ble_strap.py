@@ -25,6 +25,7 @@ class BleStrap:
         self,
         ble_address: str,
         bike_position: int,
+        bike_label: str,
         rider_name: str,
         max_hr: int,
         weight_kg: float | None,
@@ -37,6 +38,7 @@ class BleStrap:
     ):
         self.ble_address   = ble_address
         self.bike_position = bike_position
+        self.bike_label    = bike_label
         self.rider_name    = rider_name
         self.max_hr        = max_hr
         self.weight_kg     = weight_kg
@@ -177,9 +179,10 @@ class BleStrap:
             )
 
         asyncio.create_task(self.broadcast_fn({
-            "type":     "hr_update",
-            "position": self.bike_position,
-            "name":     self.rider_name,
+            "type":       "hr_update",
+            "position":   self.bike_position,
+            "bike_label": self.bike_label,
+            "name":       self.rider_name,
             "hr":       hr,
             "pct":      pct,
             "zone":     zone,
