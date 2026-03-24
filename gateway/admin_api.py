@@ -574,6 +574,21 @@ class AdminApi:
                      "auto_added": False}
             if label:
                 entry["catalog_label"] = label
+                # Ak je to MYZONE pás, doplň ble_name na addr-matched zázname (ak chýba)
+                # a tiež doplň MAC na ble_name-matched zázname (ak existuje separátne)
+                if dev_name.upper().startswith("MYZONE-"):
+                    db.execute(
+                        "UPDATE strap_catalog SET ble_name=? WHERE ble_address=? AND (ble_name IS NULL OR ble_name='')",
+                        (dev_name, dev_addr),
+                    )
+                    dup = db.execute(
+                        "SELECT id FROM strap_catalog WHERE ble_name=? AND (ble_address IS NULL OR ble_address='')",
+                        (dev_name,),
+                    ).fetchone()
+                    if dup:
+                        db.execute("UPDATE strap_catalog SET ble_address=? WHERE id=?", (dev_addr, dup[0]))
+                        logger.info(f"Zlúčené duplikáty pre {dev_name} ({dev_addr})")
+                    db.commit()
             elif dev_name.upper().startswith("MYZONE-"):
                 # Skontroluj či existuje záznam s rovnakým ble_name (ale bez MAC)
                 existing = db.execute(
