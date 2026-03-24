@@ -57,11 +57,6 @@ CREATE TABLE IF NOT EXISTS riders_cache (
 );
 
 -- Jazdci priradení k bicyklom
-INSERT OR IGNORE INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender) VALUES
-    ( 1, 'rusinka', 170, 85.0, 1972, 'M'),
-    ( 7, 'PP',      171, 89.0, 1973, 'M'),
-    (13, 'Sona',    170, 60.0, 1985, 'F'),
-    (15, '15',      174, 115.0, 1978, 'M');
 
 CREATE TABLE IF NOT EXISTS strap_catalog (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
