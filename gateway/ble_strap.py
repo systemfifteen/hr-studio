@@ -87,16 +87,26 @@ class BleStrap:
                     f"Pripájam {self.ble_address} → "
                     f"pozícia {self.bike_position} ({self.rider_name})"
                 )
-                # Ak prebieha scan — počkaj kým skončí (scan dostáva prioritu)
-                if self.scan_event:
-                    while self.scan_event.is_set() and self._running:
-                        await asyncio.sleep(0.5)
-                    if not self._running:
-                        break
-                # Serializuj pokusy o pripojenie — BlueZ zvláda len jedno naraz
+                # Serializuj pokusy o pripojenie — BlueZ zvláda len jedno naraz.
+                # Ak prebieha scan, uvoľni cestu: pokúšaj sa získať lock po 1s
+                # úsekoch a pred každým pokusom skontroluj scan_event.
                 lock = self.connect_lock if self.connect_lock else asyncio.Lock()
-                async with lock:
+                lock_acquired = False
+                while self._running and not lock_acquired:
+                    if self.scan_event and self.scan_event.is_set():
+                        await asyncio.sleep(0.5)
+                        continue
+                    try:
+                        await asyncio.wait_for(lock.acquire(), timeout=1.0)
+                        lock_acquired = True
+                    except asyncio.TimeoutError:
+                        pass  # skús znova — re-check scan_event
+                if not self._running:
+                    break
+                try:
                     await client.connect()
+                finally:
+                    lock.release()
 
                 # Lock uvoľnený — BlueZ môže spracovať ďalší pás
                 await client.start_notify(HEART_RATE_UUID, self._on_hr_data)
