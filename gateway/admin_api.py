@@ -544,17 +544,25 @@ class AdminApi:
     async def _scan(self):
         logger.info(f"BLE scan — hľadám HR zariadenia ({SCAN_TIMEOUT}s)...")
         # BlueZ zvláda len jednu BLE operáciu naraz — počkáme na connect_lock
-        lock = self.manager._connect_lock if self.manager else None
+        lock       = self.manager._connect_lock if self.manager else None
+        scan_event = self.manager._scan_event   if self.manager else None
         async def _do_scan():
             return await BleakScanner.discover(
                 timeout=SCAN_TIMEOUT,
                 service_uuids=[HEART_RATE_SERVICE_UUID],
             )
-        if lock:
-            async with lock:
+        # Nastav scan_event → straps prestanú súperiť o lock
+        if scan_event:
+            scan_event.set()
+        try:
+            if lock:
+                async with lock:
+                    devices = await _do_scan()
+            else:
                 devices = await _do_scan()
-        else:
-            devices = await _do_scan()
+        finally:
+            if scan_event:
+                scan_event.clear()
 
         # Load catalog for enrichment
         db = self._db()

@@ -35,6 +35,7 @@ class BleStrap:
         session_mgr=None,
         start_delay: float = 0.0,
         connect_lock: asyncio.Lock | None = None,
+        scan_event: asyncio.Event | None = None,
     ):
         self.ble_address   = ble_address
         self.bike_position = bike_position
@@ -48,6 +49,7 @@ class BleStrap:
         self.session_mgr   = session_mgr
         self.start_delay   = start_delay
         self.connect_lock  = connect_lock
+        self.scan_event    = scan_event
 
         self.connected      = False
         self.last_seen      = 0.0
@@ -85,6 +87,12 @@ class BleStrap:
                     f"Pripájam {self.ble_address} → "
                     f"pozícia {self.bike_position} ({self.rider_name})"
                 )
+                # Ak prebieha scan — počkaj kým skončí (scan dostáva prioritu)
+                if self.scan_event:
+                    while self.scan_event.is_set() and self._running:
+                        await asyncio.sleep(0.5)
+                    if not self._running:
+                        break
                 # Serializuj pokusy o pripojenie — BlueZ zvláda len jedno naraz
                 lock = self.connect_lock if self.connect_lock else asyncio.Lock()
                 async with lock:
