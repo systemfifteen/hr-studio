@@ -533,7 +533,7 @@ class AdminApi:
     async def _restart_bt(self):
         import urllib.request
         try:
-            urllib.request.urlopen("http://127.0.0.1:8768/restart-bt", data=b"", timeout=20)
+            urllib.request.urlopen("http://127.0.0.1:8768/restart-bt", data=b"", timeout=30)
             await asyncio.sleep(3)   # počkaj kým BlueZ nahodí hci0
             if self.manager:
                 await self.manager.reload()
