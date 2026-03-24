@@ -583,12 +583,41 @@ async function saveModal() {
   else toast('Chyba', 'error');
 }
 
-// ── Inline strap edit (quick assign by typing address) ─────────────────────
+// ── Strap assign modal ──────────────────────────────────────────────────────
+let _strapBikeId = null;
+
 function editStrap(bikeId, current) {
-  const addr = prompt('BLE adresa pásu (napr. D4:AC:4F:xx:xx:xx):', current);
-  if (addr === null) return;
-  if (!addr.trim()) { removeStrap(bikeId); return; }
-  assignStrapTo(bikeId, addr.trim().toUpperCase());
+  _strapBikeId = bikeId;
+  const sel = document.getElementById('sa-catalog-select');
+  sel.innerHTML = '<option value="">— vyber pás —</option>' +
+    catalog.map(c => {
+      const info = c.ble_address ? ` · ${c.ble_address}` : ' · bez MAC';
+      return `<option value="${c.id}">${c.label} — ${c.ble_name || '?'}${info}</option>`;
+    }).join('');
+  // pre-select by current address
+  if (current) {
+    const matched = catalog.find(c => c.ble_address && c.ble_address.toUpperCase() === current.toUpperCase());
+    if (matched) sel.value = matched.id;
+  }
+  document.getElementById('sa-modal').style.display = 'flex';
+}
+
+function closeSaModal() {
+  document.getElementById('sa-modal').style.display = 'none';
+  _strapBikeId = null;
+}
+
+async function saveSaModal() {
+  if (!_strapBikeId) return;
+  const catalogId = document.getElementById('sa-catalog-select').value;
+  if (!catalogId) { toast('Vyber pás zo zoznamu', 'error'); return; }
+  const r = await fetch(`${API}/bikes/${_strapBikeId}/strap`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ catalog_id: parseInt(catalogId) }),
+  });
+  if (r.ok) { toast('Pás priradený', 'success'); loadBikes(); closeSaModal(); }
+  else toast('Chyba priradenia', 'error');
 }
 
 async function assignStrapTo(bikeId, bleAddr, label) {
@@ -1189,6 +1218,21 @@ async function saveEditCatalog() {
   }
 }
 </script>
+
+<!-- Modal: assign strap to bike -->
+<div id="sa-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100">
+  <div style="background:#1a2530;border:1px solid #2a4060;border-radius:10px;padding:24px;width:360px">
+    <h3 style="font-size:16px;margin-bottom:16px">Priradiť pás</h3>
+    <div class="form-row">
+      <label>Pás</label>
+      <select id="sa-catalog-select" style="flex:1"></select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveSaModal()" style="flex:1">Priradiť</button>
+      <button class="btn btn-danger" onclick="closeSaModal()" style="flex:1">Zrušiť</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal: edit strap catalog -->
 <div id="ec-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100">
