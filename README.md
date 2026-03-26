@@ -125,7 +125,7 @@ sudo dd if=hr-studio.iso of=/dev/sdX bs=4M status=progress
 **Pred inštaláciou z USB:**
 - V BIOSe prepnúť disk z **Intel RST → AHCI** (inak kernel nevidí NVMe)
 - Boot z USB, inštalácia je plne automatická (preseed)
-- Prihlasovacie údaje: `adminhrstudio` / `hrstudio`
+- Prihlasovacie údaje: `adminhrstudio` / `<zmeň heslo po inštalácii!>`
 
 ### 3. Manuálne
 
@@ -144,7 +144,7 @@ docker compose -f docker-compose.standalone.yml up --build -d
 systemctl restart hr-studio
 
 # Alebo manuálne na notebooku:
-echo 'hrstudio' | sudo -S git -C /opt/hr-studio pull
+sudo git -C /opt/hr-studio pull
 docker compose build gateway frontend
 docker compose up -d gateway frontend
 ```
@@ -285,8 +285,8 @@ Po zmene: `sudo update-grub && sudo reboot`
 
 ### SSH na notebook
 ```bash
-sshpass -p 'hrstudio' ssh -o StrictHostKeyChecking=no adminhrstudio@192.168.1.145
-# sudo heslo: hrstudio
+sshpass -p '<heslo>' ssh -o StrictHostKeyChecking=no adminhrstudio@192.168.1.145
+# sudo heslo rovnaké ako SSH heslo
 ```
 
 ### Kontajnery nebeží
