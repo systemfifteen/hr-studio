@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime
 
 from bleak import BleakScanner
-from hr_utils import calc_max_hr
+from hr_utils import calc_max_hr, calc_age
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,10 @@ class AdminApi:
                 max_hr_override INTEGER
             )
         """)
+        # Migrácia: pridaj birth_date ak ešte neexistuje
+        cols = [r[1] for r in db.execute("PRAGMA table_info(riders_catalog)").fetchall()]
+        if "birth_date" not in cols:
+            db.execute("ALTER TABLE riders_catalog ADD COLUMN birth_date TEXT")
         db.commit()
         db.close()
 
@@ -277,29 +281,33 @@ class AdminApi:
     def _get_rider_catalog(self):
         db = self._db()
         rows = db.execute(
-            "SELECT id, name, birth_year, weight_kg, gender, max_hr_override "
+            "SELECT id, name, birth_year, weight_kg, gender, max_hr_override, birth_date "
             "FROM riders_catalog ORDER BY name"
         ).fetchall()
         db.close()
         return [
             {"id": r[0], "name": r[1], "birth_year": r[2],
-             "weight_kg": r[3], "gender": r[4], "max_hr_override": r[5]}
+             "weight_kg": r[3], "gender": r[4], "max_hr_override": r[5],
+             "birth_date": r[6]}
             for r in rows
         ]
 
     def _add_rider_catalog(self, data):
         name       = (data.get("name") or "").strip()
+        birth_date = (data.get("birth_date") or "").strip() or None
         birth_year = data.get("birth_year")
         weight_kg  = data.get("weight_kg") or None
         gender     = (data.get("gender") or "M").upper()
         max_hr_override = data.get("max_hr_override") or None
-        if not name or not birth_year:
-            return 400, {"error": "name and birth_year required"}
+        if not name or (not birth_date and not birth_year):
+            return 400, {"error": "name and birth_date (or birth_year) required"}
+        if birth_date and not birth_year:
+            birth_year = int(birth_date[:4])
         db = self._db()
         db.execute(
-            "INSERT INTO riders_catalog(name, birth_year, weight_kg, gender, max_hr_override) "
-            "VALUES(?,?,?,?,?)",
-            (name, int(birth_year), weight_kg, gender, max_hr_override),
+            "INSERT INTO riders_catalog(name, birth_year, birth_date, weight_kg, gender, max_hr_override) "
+            "VALUES(?,?,?,?,?,?)",
+            (name, int(birth_year), birth_date, weight_kg, gender, max_hr_override),
         )
         db.commit()
         db.close()
@@ -307,17 +315,20 @@ class AdminApi:
 
     def _update_rider_catalog(self, rc_id, data):
         name       = (data.get("name") or "").strip()
+        birth_date = (data.get("birth_date") or "").strip() or None
         birth_year = data.get("birth_year")
         weight_kg  = data.get("weight_kg") or None
         gender     = (data.get("gender") or "M").upper()
         max_hr_override = data.get("max_hr_override") or None
-        if not name or not birth_year:
-            return 400, {"error": "name and birth_year required"}
+        if not name or (not birth_date and not birth_year):
+            return 400, {"error": "name and birth_date (or birth_year) required"}
+        if birth_date and not birth_year:
+            birth_year = int(birth_date[:4])
         db = self._db()
         db.execute(
-            "UPDATE riders_catalog SET name=?, birth_year=?, weight_kg=?, "
+            "UPDATE riders_catalog SET name=?, birth_year=?, birth_date=?, weight_kg=?, "
             "gender=?, max_hr_override=? WHERE id=?",
-            (name, int(birth_year), weight_kg, gender, max_hr_override, rc_id),
+            (name, int(birth_year), birth_date, weight_kg, gender, max_hr_override, rc_id),
         )
         db.commit()
         db.close()
@@ -398,14 +409,14 @@ class AdminApi:
         if catalog_id is not None:
             db = self._db()
             row = db.execute(
-                "SELECT name, birth_year, weight_kg, gender, max_hr_override "
+                "SELECT name, birth_year, weight_kg, gender, max_hr_override, birth_date "
                 "FROM riders_catalog WHERE id=?", (int(catalog_id),)
             ).fetchone()
             db.close()
             if not row:
                 return 404, {"error": "catalog entry not found"}
-            name, birth_year, weight_kg, gender, max_hr_override = row
-            max_hr = max_hr_override or calc_max_hr(int(birth_year), gender)
+            name, birth_year, weight_kg, gender, max_hr_override, birth_date = row
+            max_hr = max_hr_override or calc_max_hr(birth_year=birth_year, gender=gender, birth_date=birth_date)
         else:
             name       = (data.get("name") or "").strip()
             birth_year = data.get("birth_year")

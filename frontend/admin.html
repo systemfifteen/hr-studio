@@ -337,7 +337,7 @@ input[type=number]{width:80px}
       </select>
     </div>
     <div class="form-row"><label>Meno</label><input type="text" id="r-name" placeholder="Meno ridera"></div>
-    <div class="form-row"><label>Rok narodenia</label><input type="number" id="r-birth-year" placeholder="napr. 1990" style="width:100px"></div>
+    <div class="form-row"><label>Dátum nar.</label><input type="date" id="r-birth-date" style="width:150px"></div>
     <div class="form-row"><label>Váha (kg)</label><input type="number" id="r-weight" placeholder="napr. 75" style="width:100px" step="0.5"></div>
     <div class="form-row">
       <label>Pohlavie</label>
@@ -360,7 +360,7 @@ input[type=number]{width:80px}
   <div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:24px;width:380px;max-width:95vw">
     <h3 style="font-size:16px;margin-bottom:16px" id="rcm-title">Jazdec v katalógu</h3>
     <div class="form-row"><label>Meno</label><input type="text" id="rcm-name" placeholder="Meno"></div>
-    <div class="form-row"><label>Rok nar.</label><input type="number" id="rcm-birth-year" placeholder="napr. 1985" style="width:100px"></div>
+    <div class="form-row"><label>Dátum nar.</label><input type="date" id="rcm-birth-date" style="width:150px"></div>
     <div class="form-row"><label>Váha (kg)</label><input type="number" id="rcm-weight" placeholder="napr. 70" style="width:100px" step="0.5"></div>
     <div class="form-row">
       <label>Pohlavie</label>
@@ -753,7 +753,7 @@ function editRider(position, rider) {
   const bike = bikes.find(b => b.position === position);
   document.getElementById('r-bike-label').textContent = `#${position} (${bike?.label || position})`;
   document.getElementById('r-name').value       = rider.name       || '';
-  document.getElementById('r-birth-year').value = rider.birth_year || '';
+  document.getElementById('r-birth-date').value = rider.birth_date || (rider.birth_year ? rider.birth_year + '-01-01' : '');
   document.getElementById('r-weight').value     = rider.weight_kg  || '';
   document.getElementById('r-gender').value     = rider.gender     || 'M';
   document.getElementById('r-delete-btn').style.display = rider.name ? 'inline-block' : 'none';
@@ -767,14 +767,14 @@ function closeRiderModal() {
 
 async function saveRider() {
   const name       = document.getElementById('r-name').value.trim();
-  const birth_year = parseInt(document.getElementById('r-birth-year').value);
+  const birth_date = document.getElementById('r-birth-date').value || null;
   const weight_kg  = parseFloat(document.getElementById('r-weight').value) || null;
   const gender     = document.getElementById('r-gender').value;
-  if (!name || !birth_year) { toast('Meno a rok narodenia sú povinné', 'error'); return; }
+  if (!name || !birth_date) { toast('Meno a dátum narodenia sú povinné', 'error'); return; }
   const r = await fetch(`${API}/riders/${riderPosition}`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ name, birth_year, weight_kg, gender }),
+    body: JSON.stringify({ name, birth_date, birth_year: parseInt(birth_date), weight_kg, gender }),
   });
   const d = await r.json();
   if (!r.ok) { toast(d.error || 'Chyba', 'error'); return; }
@@ -1087,13 +1087,21 @@ function renderRiderCatalog() {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">Katalóg je prázdny — klikni "Pridať jazdca"</td></tr>';
     return;
   }
-  const yr = new Date().getFullYear();
+  const today = new Date();
   tbody.innerHTML = riderCatalog.map(r => {
-    const age   = yr - r.birth_year;
+    let age, birthDisplay;
+    if (r.birth_date) {
+      const bd = new Date(r.birth_date);
+      age = today.getFullYear() - bd.getFullYear() - ((today.getMonth(), today.getDate()) < (bd.getMonth(), bd.getDate()) ? 1 : 0);
+      birthDisplay = r.birth_date;
+    } else {
+      age = today.getFullYear() - r.birth_year;
+      birthDisplay = r.birth_year;
+    }
     const maxHr = r.max_hr_override || calcMaxHr(r.birth_year, r.gender);
     return `<tr>
       <td><strong>${r.name}</strong></td>
-      <td>${r.birth_year} <span style="color:#666;font-size:11px">(${age}r)</span></td>
+      <td>${birthDisplay} <span style="color:#666;font-size:11px">(${age}r)</span></td>
       <td>${r.weight_kg != null ? r.weight_kg + ' kg' : '—'}</td>
       <td>${r.gender === 'F' ? 'Žena' : 'Muž'}</td>
       <td>${maxHr}</td>
@@ -1116,7 +1124,7 @@ function onRiderCatalogSelect() {
   const r = riderCatalog.find(x => x.id === id);
   if (!r) return;
   document.getElementById('r-name').value       = r.name;
-  document.getElementById('r-birth-year').value = r.birth_year;
+  document.getElementById('r-birth-date').value = r.birth_date || (r.birth_year ? r.birth_year + '-01-01' : '');
   document.getElementById('r-weight').value     = r.weight_kg || '';
   document.getElementById('r-gender').value     = r.gender;
 }
@@ -1125,7 +1133,7 @@ function showAddRiderCatalog() {
   rcEditId = null;
   document.getElementById('rcm-title').textContent = 'Pridať jazdca do katalógu';
   document.getElementById('rcm-name').value       = '';
-  document.getElementById('rcm-birth-year').value = '';
+  document.getElementById('rcm-birth-date').value = '';
   document.getElementById('rcm-weight').value     = '';
   document.getElementById('rcm-gender').value     = 'M';
   document.getElementById('rcm-max-hr').value     = '';
@@ -1137,7 +1145,7 @@ function editRiderCatalog(r) {
   rcEditId = r.id;
   document.getElementById('rcm-title').textContent = 'Upraviť jazdca';
   document.getElementById('rcm-name').value        = r.name;
-  document.getElementById('rcm-birth-year').value  = r.birth_year;
+  document.getElementById('rcm-birth-date').value  = r.birth_date || (r.birth_year ? r.birth_year + '-01-01' : '');
   document.getElementById('rcm-weight').value      = r.weight_kg || '';
   document.getElementById('rcm-gender').value      = r.gender;
   document.getElementById('rcm-max-hr').value      = r.max_hr_override || '';
@@ -1152,17 +1160,17 @@ function closeRcModal() {
 
 async function saveRcModal() {
   const name       = document.getElementById('rcm-name').value.trim();
-  const birth_year = parseInt(document.getElementById('rcm-birth-year').value);
+  const birth_date = document.getElementById('rcm-birth-date').value || null;
   const weight_kg  = parseFloat(document.getElementById('rcm-weight').value) || null;
   const gender     = document.getElementById('rcm-gender').value;
   const max_hr_override = parseInt(document.getElementById('rcm-max-hr').value) || null;
-  if (!name || !birth_year) { toast('Meno a rok narodenia sú povinné', 'error'); return; }
+  if (!name || !birth_date) { toast('Meno a dátum narodenia sú povinné', 'error'); return; }
   const url    = rcEditId ? `${API}/rider-catalog/${rcEditId}` : `${API}/rider-catalog`;
   const method = rcEditId ? 'PUT' : 'POST';
   const r = await fetch(url, {
     method,
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ name, birth_year, weight_kg, gender, max_hr_override }),
+    body: JSON.stringify({ name, birth_date, birth_year: parseInt(birth_date), weight_kg, gender, max_hr_override }),
   });
   if (r.ok) {
     toast(rcEditId ? 'Aktualizované' : 'Jazdec pridaný', 'success');

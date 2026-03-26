@@ -1,9 +1,18 @@
-from datetime import datetime
+from datetime import datetime, date
 
 
-def calc_max_hr(birth_year: int, gender: str = None) -> int:
+def calc_age(birth_date: str = None, birth_year: int = None) -> int:
+    """Presný vek z dátumu narodenia (YYYY-MM-DD), alebo aproximácia z roku."""
+    today = date.today()
+    if birth_date:
+        bd = datetime.strptime(birth_date, "%Y-%m-%d").date()
+        return today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+    return today.year - int(birth_year)
+
+
+def calc_max_hr(birth_year: int = None, gender: str = None, birth_date: str = None) -> int:
     """Tanaka formula — presnejšia ako 220-vek."""
-    age = datetime.now().year - birth_year
+    age = calc_age(birth_date=birth_date, birth_year=birth_year)
     if gender and gender.upper() == "F":
         mhr = 206 - (0.88 * age)
     else:
