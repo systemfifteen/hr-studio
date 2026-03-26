@@ -259,6 +259,28 @@ sudo -u kiosk env DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority \
 
 ---
 
+## Known issues — notebook (Dell Latitude 7390)
+
+### Freeze fix (i915 + NVMe)
+
+Dell Latitude 7390 s i7-8650U má known bug — Intel PSR (Panel Self Refresh) spôsobuje GPU freeze. Fix v `/etc/default/grub`:
+
+```
+GRUB_CMDLINE_LINUX_DEFAULT="quiet i915.enable_psr=0 nvme_core.default_ps_max_latency_us=0"
+```
+
+Po zmene: `sudo update-grub && sudo reboot`
+
+### WiFi skripty
+
+```bash
+~/wifi-home.sh     # domáca sieť No_internet
+~/wifi-iphone.sh   # iPhone hotspot
+~/wifi-studio.sh   # spinning štúdio RRUSINA
+```
+
+---
+
 ## Troubleshooting
 
 ### SSH na notebook
@@ -340,10 +362,11 @@ systemctl status hdmi-helper
 
 ## TODO
 
-- [ ] FIT súbor export per rider (knižnica fit-tool)
+- [x] FIT súbor export per rider (fit-tool==0.9.15, `GET /api/sessions/{id}/riders/{pos}/export.fit`)
 - [ ] FitReserve sync — `/api/v1/studio/riders/today` → riders_cache pred hodinou
 - [ ] Strava / Garmin Connect upload cez FitReserve
 - [ ] Otestovať s 2+ MZ-1 pásmi súčasne
+- [ ] Presný dátum narodenia jazdcov (birth_year → birth_date) — Tanaka formula z presného veku
 
 ---
 
