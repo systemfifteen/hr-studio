@@ -240,7 +240,16 @@ input[type=number]{width:80px}
 
   <!-- Rider catalog -->
   <section>
-    <h2>Katalóg jazdcov <span class="badge warn" id="rcatalog-count">0</span></h2>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+      <h2 style="margin:0">Katalóg jazdcov <span class="badge warn" id="rcatalog-count">0</span></h2>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+        <label style="color:#aaa">Max HR formula:</label>
+        <select id="hr-formula-select" onchange="saveFormula()" style="background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:13px">
+          <option value="tanaka">Tanaka (presnejšia)</option>
+          <option value="classic">Classic (220 − vek)</option>
+        </select>
+      </div>
+    </div>
     <table class="tbl" id="rcatalog-table">
       <thead>
         <tr>
@@ -1059,12 +1068,44 @@ async function reloadDashboard() {
   toast('Dashboard reload odoslaný', 'success');
 }
 
+// ── Settings ───────────────────────────────────────────────────────────────
+let currentFormula = 'tanaka';
+
+async function loadSettings() {
+  try {
+    const r = await fetch(`${API}/settings`);
+    const d = await r.json();
+    currentFormula = d.hr_formula || 'tanaka';
+    document.getElementById('hr-formula-select').value = currentFormula;
+  } catch (e) {}
+}
+
+async function saveFormula() {
+  currentFormula = document.getElementById('hr-formula-select').value;
+  await fetch(`${API}/settings`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ hr_formula: currentFormula }),
+  });
+  renderRiderCatalog();
+  toast(`Formula: ${currentFormula === 'tanaka' ? 'Tanaka' : 'Classic 220−vek'}`, 'success');
+}
+
 // ── Rider catalog ──────────────────────────────────────────────────────────
 let riderCatalog = [];
 let rcEditId = null;
 
-function calcMaxHr(birthYear, gender) {
-  const age = new Date().getFullYear() - birthYear;
+function calcMaxHr(birthYear, gender, birthDate) {
+  let age;
+  if (birthDate) {
+    const bd = new Date(birthDate);
+    const today = new Date();
+    age = today.getFullYear() - bd.getFullYear() -
+      ((today.getMonth() * 100 + today.getDate()) < (bd.getMonth() * 100 + bd.getDate()) ? 1 : 0);
+  } else {
+    age = new Date().getFullYear() - birthYear;
+  }
+  if (currentFormula === 'classic') return Math.max(1, 220 - age);
   return Math.round(gender === 'F' ? 206 - 0.88 * age : 208 - 0.7 * age);
 }
 
@@ -1098,7 +1139,7 @@ function renderRiderCatalog() {
       age = today.getFullYear() - r.birth_year;
       birthDisplay = r.birth_year;
     }
-    const maxHr = r.max_hr_override || calcMaxHr(r.birth_year, r.gender);
+    const maxHr = r.max_hr_override || calcMaxHr(r.birth_year, r.gender, r.birth_date);
     return `<tr>
       <td><strong>${r.name}</strong></td>
       <td>${birthDisplay} <span style="color:#666;font-size:11px">(${age}r)</span></td>
@@ -1195,7 +1236,7 @@ loadBikes();
 loadSession();
 loadStrapStatus();
 loadStrapCatalog();
-loadRiderCatalog();
+loadSettings().then(() => loadRiderCatalog());
 loadSessions();
 setInterval(loadStatus, 30000);
 setInterval(loadStrapStatus, 3000);

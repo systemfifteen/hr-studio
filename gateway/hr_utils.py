@@ -10,9 +10,13 @@ def calc_age(birth_date: str = None, birth_year: int = None) -> int:
     return today.year - int(birth_year)
 
 
-def calc_max_hr(birth_year: int = None, gender: str = None, birth_date: str = None) -> int:
-    """Tanaka formula — presnejšia ako 220-vek."""
+def calc_max_hr(birth_year: int = None, gender: str = None, birth_date: str = None,
+                formula: str = "tanaka") -> int:
+    """Výpočet max HR. formula: 'tanaka' alebo 'classic' (220-vek)."""
     age = calc_age(birth_date=birth_date, birth_year=birth_year)
+    if formula == "classic":
+        return max(1, 220 - age)
+    # Tanaka (default)
     if gender and gender.upper() == "F":
         mhr = 206 - (0.88 * age)
     else:

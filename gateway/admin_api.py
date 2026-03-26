@@ -45,6 +45,13 @@ class AdminApi:
         cols = [r[1] for r in db.execute("PRAGMA table_info(riders_catalog)").fetchall()]
         if "birth_date" not in cols:
             db.execute("ALTER TABLE riders_catalog ADD COLUMN birth_date TEXT")
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES('hr_formula', 'tanaka')")
         db.commit()
         db.close()
 
@@ -183,6 +190,13 @@ class AdminApi:
             if method == "DELETE":
                 return self._delete_catalog(catalog_id)
 
+        # Settings
+        if method == "GET" and path == "/settings":
+            return 200, self._get_settings()
+
+        if method == "PUT" and path == "/settings":
+            return self._update_settings(data)
+
         # Rider catalog
         if method == "GET" and path == "/rider-catalog":
             return 200, self._get_rider_catalog()
@@ -275,6 +289,33 @@ class AdminApi:
         db.commit()
         db.close()
         return 200, {"ok": True}
+
+    # ── Settings ───────────────────────────────────────────────────────────────
+
+    def _get_settings(self):
+        db = self._db()
+        rows = db.execute("SELECT key, value FROM settings").fetchall()
+        db.close()
+        return {r[0]: r[1] for r in rows}
+
+    def _update_settings(self, data):
+        allowed = {"hr_formula"}
+        db = self._db()
+        for key, value in data.items():
+            if key not in allowed:
+                continue
+            if key == "hr_formula" and value not in ("tanaka", "classic"):
+                return 400, {"error": "hr_formula must be 'tanaka' or 'classic'"}
+            db.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?,?)", (key, value))
+        db.commit()
+        db.close()
+        return 200, {"ok": True}
+
+    def _get_formula(self):
+        db = self._db()
+        row = db.execute("SELECT value FROM settings WHERE key='hr_formula'").fetchone()
+        db.close()
+        return row[0] if row else "tanaka"
 
     # ── Rider catalog ──────────────────────────────────────────────────────────
 
@@ -416,7 +457,8 @@ class AdminApi:
             if not row:
                 return 404, {"error": "catalog entry not found"}
             name, birth_year, weight_kg, gender, max_hr_override, birth_date = row
-            max_hr = max_hr_override or calc_max_hr(birth_year=birth_year, gender=gender, birth_date=birth_date)
+            formula = self._get_formula()
+            max_hr = max_hr_override or calc_max_hr(birth_year=birth_year, gender=gender, birth_date=birth_date, formula=formula)
         else:
             name       = (data.get("name") or "").strip()
             birth_year = data.get("birth_year")
@@ -426,7 +468,8 @@ class AdminApi:
                 return 400, {"error": "name required"}
             if not birth_year:
                 return 400, {"error": "birth_year required"}
-            max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender)
+            formula = self._get_formula()
+            max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender, formula=formula)
         db = self._db()
         db.execute("""
             INSERT INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender)
