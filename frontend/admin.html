@@ -1098,10 +1098,10 @@ let rcEditId = null;
 function calcMaxHr(birthYear, gender, birthDate) {
   let age;
   if (birthDate) {
-    const bd = new Date(birthDate);
+    const [byear, bmonth, bday] = birthDate.split('-').map(Number);
     const today = new Date();
-    age = today.getFullYear() - bd.getFullYear() -
-      ((today.getMonth() * 100 + today.getDate()) < (bd.getMonth() * 100 + bd.getDate()) ? 1 : 0);
+    age = today.getFullYear() - byear -
+      ((today.getMonth() + 1) * 100 + today.getDate() < bmonth * 100 + bday ? 1 : 0);
   } else {
     age = new Date().getFullYear() - birthYear;
   }
@@ -1132,8 +1132,9 @@ function renderRiderCatalog() {
   tbody.innerHTML = riderCatalog.map(r => {
     let age, birthDisplay;
     if (r.birth_date) {
-      const bd = new Date(r.birth_date);
-      age = today.getFullYear() - bd.getFullYear() - ((today.getMonth(), today.getDate()) < (bd.getMonth(), bd.getDate()) ? 1 : 0);
+      const [byear, bmonth, bday] = r.birth_date.split('-').map(Number);
+      age = today.getFullYear() - byear -
+        ((today.getMonth() + 1) * 100 + today.getDate() < bmonth * 100 + bday ? 1 : 0);
       birthDisplay = r.birth_date;
     } else {
       age = today.getFullYear() - r.birth_year;
