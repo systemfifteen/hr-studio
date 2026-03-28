@@ -308,8 +308,8 @@ class AdminApi:
         for key, value in data.items():
             if key not in allowed:
                 continue
-            if key == "hr_formula" and value not in ("tanaka", "classic"):
-                return 400, {"error": "hr_formula must be 'tanaka' or 'classic'"}
+            if key == "hr_formula" and value not in ("hunt", "tanaka", "classic"):
+                return 400, {"error": "hr_formula must be 'hunt', 'tanaka' or 'classic'"}
             db.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?,?)", (key, value))
         db.commit()
         db.close()
@@ -319,7 +319,7 @@ class AdminApi:
         db = self._db()
         row = db.execute("SELECT value FROM settings WHERE key='hr_formula'").fetchone()
         db.close()
-        return row[0] if row else "tanaka"
+        return row[0] if row else "hunt"
 
     # ── Rider catalog ──────────────────────────────────────────────────────────
 
@@ -511,7 +511,7 @@ class AdminApi:
                 (bike_id,),
             ).fetchone()
             rider = db.execute(
-                "SELECT name, max_hr, weight_kg, birth_year, gender "
+                "SELECT name, max_hr, weight_kg, birth_year, gender, birth_date "
                 "FROM riders_cache WHERE bike_position=?",
                 (position,),
             ).fetchone()
@@ -522,7 +522,7 @@ class AdminApi:
                 "strap":    {"id": strap[0], "ble_address": strap[1], "label": strap[2]}
                             if strap else None,
                 "rider":    {"name": rider[0], "max_hr": rider[1], "weight_kg": rider[2],
-                             "birth_year": rider[3], "gender": rider[4]}
+                             "birth_year": rider[3], "gender": rider[4], "birth_date": rider[5]}
                             if rider else None,
             })
         db.close()
