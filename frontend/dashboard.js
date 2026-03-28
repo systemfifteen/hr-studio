@@ -85,8 +85,8 @@ function handleMessage(msg) {
       break;
 
     case "riders_updated":
-      setTimeout(() => location.reload(), 2000);
       showToast("Riders aktualizovaní");
+      fetchAndMergeRiders();
       break;
 
     case "session_stopped":
@@ -276,6 +276,37 @@ if (navigator.getBattery) {
     bat.addEventListener("levelchange",    () => updateBattery(bat));
     bat.addEventListener("chargingchange", () => updateBattery(bat));
   });
+}
+
+async function fetchAndMergeRiders() {
+  try {
+    const res  = await fetch('/api/riders');
+    const list = await res.json();
+    const newPositions = new Set(list.map(r => r.bike_position));
+
+    // Odstráň pozície ktoré už nie sú v konfigurácii
+    for (const pos of Object.keys(riders).map(Number)) {
+      if (!newPositions.has(pos)) delete riders[pos];
+    }
+
+    // Doplň nových, aktualizuj metadata existujúcich (zachovaj live dáta)
+    list.forEach(r => {
+      if (riders[r.bike_position]) {
+        riders[r.bike_position].name   = r.name;
+        riders[r.bike_position].max_hr = r.max_hr;
+      } else {
+        riders[r.bike_position] = {
+          ...r, position: r.bike_position,
+          pct: 0, zone: 0, calories: 0, meps: 0, connected: false,
+        };
+      }
+    });
+
+    renderGrid();
+  } catch (e) {
+    console.warn("fetchAndMergeRiders zlyhalo, reloading:", e);
+    location.reload();
+  }
 }
 
 connect();
