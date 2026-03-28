@@ -348,7 +348,7 @@ input[type=number]{width:90px}
       </select>
     </div>
     <div class="form-row"><label>Meno</label><input type="text" id="r-name" placeholder="Meno ridera"></div>
-    <div class="form-row"><label>Dátum nar.</label><input type="date" id="r-birth-date" style="width:150px"></div>
+    <div class="form-row"><label>Dátum nar.</label><input type="text" id="r-birth-date" placeholder="dd.mm.yyyy" style="width:120px" maxlength="10"></div>
     <div class="form-row"><label>Váha (kg)</label><input type="number" id="r-weight" placeholder="napr. 75" style="width:100px" step="0.5"></div>
     <div class="form-row">
       <label>Pohlavie</label>
@@ -371,7 +371,7 @@ input[type=number]{width:90px}
   <div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:24px;width:380px;max-width:95vw">
     <h3 style="font-size:16px;margin-bottom:16px" id="rcm-title">Jazdec v katalógu</h3>
     <div class="form-row"><label>Meno</label><input type="text" id="rcm-name" placeholder="Meno"></div>
-    <div class="form-row"><label>Dátum nar.</label><input type="date" id="rcm-birth-date" style="width:150px"></div>
+    <div class="form-row"><label>Dátum nar.</label><input type="text" id="rcm-birth-date" placeholder="dd.mm.yyyy" style="width:120px" maxlength="10"></div>
     <div class="form-row"><label>Váha (kg)</label><input type="number" id="rcm-weight" placeholder="napr. 70" style="width:100px" step="0.5"></div>
     <div class="form-row">
       <label>Pohlavie</label>
@@ -764,7 +764,7 @@ function editRider(position, rider) {
   const bike = bikes.find(b => b.position === position);
   document.getElementById('r-bike-label').textContent = `#${position} (${bike?.label || position})`;
   document.getElementById('r-name').value       = rider.name       || '';
-  document.getElementById('r-birth-date').value = rider.birth_date || (rider.birth_year ? rider.birth_year + '-01-01' : '');
+  document.getElementById('r-birth-date').value = fmtDMY(rider.birth_date || (rider.birth_year ? rider.birth_year + '-01-01' : ''));
   document.getElementById('r-weight').value     = rider.weight_kg  || '';
   document.getElementById('r-gender').value     = rider.gender     || 'M';
   document.getElementById('r-delete-btn').style.display = rider.name ? 'inline-block' : 'none';
@@ -778,10 +778,11 @@ function closeRiderModal() {
 
 async function saveRider() {
   const name       = document.getElementById('r-name').value.trim();
-  const birth_date = document.getElementById('r-birth-date').value || null;
+  const birth_date = parseDMY(document.getElementById('r-birth-date').value);
   const weight_kg  = parseFloat(document.getElementById('r-weight').value) || null;
   const gender     = document.getElementById('r-gender').value;
-  if (!name || !birth_date) { toast('Meno a dátum narodenia sú povinné', 'error'); return; }
+  if (!name) { toast('Meno je povinné', 'error'); return; }
+  if (!birth_date) { toast('Dátum narodenia musí byť vo formáte dd.mm.yyyy', 'error'); return; }
   const r = await fetch(`${API}/riders/${riderPosition}`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
@@ -1104,6 +1105,19 @@ async function saveFormula() {
   toast(`Formula: ${fLabel[currentFormula] || currentFormula}`, 'success');
 }
 
+// ── Date helpers (dd.mm.yyyy ↔ yyyy-mm-dd) ─────────────────────────────────
+function parseDMY(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+}
+function fmtDMY(iso) {
+  if (!iso) return '';
+  const [y, mo, d] = iso.split('-');
+  return `${d}.${mo}.${y}`;
+}
+
 // ── Rider catalog ──────────────────────────────────────────────────────────
 let riderCatalog = [];
 let rcEditId = null;
@@ -1149,7 +1163,7 @@ function renderRiderCatalog() {
       const [byear, bmonth, bday] = r.birth_date.split('-').map(Number);
       age = today.getFullYear() - byear -
         ((today.getMonth() + 1) * 100 + today.getDate() < bmonth * 100 + bday ? 1 : 0);
-      birthDisplay = r.birth_date;
+      birthDisplay = fmtDMY(r.birth_date);
     } else {
       age = today.getFullYear() - r.birth_year;
       birthDisplay = r.birth_year;
@@ -1180,7 +1194,7 @@ function onRiderCatalogSelect() {
   const r = riderCatalog.find(x => x.id === id);
   if (!r) return;
   document.getElementById('r-name').value       = r.name;
-  document.getElementById('r-birth-date').value = r.birth_date || (r.birth_year ? r.birth_year + '-01-01' : '');
+  document.getElementById('r-birth-date').value = fmtDMY(r.birth_date || (r.birth_year ? r.birth_year + '-01-01' : ''));
   document.getElementById('r-weight').value     = r.weight_kg || '';
   document.getElementById('r-gender').value     = r.gender;
 }
@@ -1201,7 +1215,7 @@ function editRiderCatalog(r) {
   rcEditId = r.id;
   document.getElementById('rcm-title').textContent = 'Upraviť jazdca';
   document.getElementById('rcm-name').value        = r.name;
-  document.getElementById('rcm-birth-date').value  = r.birth_date || (r.birth_year ? r.birth_year + '-01-01' : '');
+  document.getElementById('rcm-birth-date').value  = fmtDMY(r.birth_date || (r.birth_year ? r.birth_year + '-01-01' : ''));
   document.getElementById('rcm-weight').value      = r.weight_kg || '';
   document.getElementById('rcm-gender').value      = r.gender;
   document.getElementById('rcm-max-hr').value      = r.max_hr_override || '';
@@ -1216,11 +1230,12 @@ function closeRcModal() {
 
 async function saveRcModal() {
   const name       = document.getElementById('rcm-name').value.trim();
-  const birth_date = document.getElementById('rcm-birth-date').value || null;
+  const birth_date = parseDMY(document.getElementById('rcm-birth-date').value);
   const weight_kg  = parseFloat(document.getElementById('rcm-weight').value) || null;
   const gender     = document.getElementById('rcm-gender').value;
   const max_hr_override = parseInt(document.getElementById('rcm-max-hr').value) || null;
-  if (!name || !birth_date) { toast('Meno a dátum narodenia sú povinné', 'error'); return; }
+  if (!name) { toast('Meno je povinné', 'error'); return; }
+  if (!birth_date) { toast('Dátum narodenia musí byť vo formáte dd.mm.yyyy', 'error'); return; }
   const url    = rcEditId ? `${API}/rider-catalog/${rcEditId}` : `${API}/rider-catalog`;
   const method = rcEditId ? 'PUT' : 'POST';
   const r = await fetch(url, {
