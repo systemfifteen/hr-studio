@@ -245,7 +245,8 @@ input[type=number]{width:90px}
       <div style="display:flex;align-items:center;gap:8px;font-size:13px">
         <label style="color:#aaa">Max HR formula:</label>
         <select id="hr-formula-select" onchange="saveFormula()" style="background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:13px">
-          <option value="tanaka">Tanaka (presnejšia)</option>
+          <option value="hunt">HUNT (211 − 0.64×vek) — odporúčané</option>
+          <option value="tanaka">Tanaka / Gulati</option>
           <option value="classic">Classic (220 − vek)</option>
         </select>
       </div>
@@ -1088,7 +1089,8 @@ async function saveFormula() {
     body: JSON.stringify({ hr_formula: currentFormula }),
   });
   renderRiderCatalog();
-  toast(`Formula: ${currentFormula === 'tanaka' ? 'Tanaka' : 'Classic 220−vek'}`, 'success');
+  const fLabel = {hunt:'HUNT 211−0.64×vek', tanaka:'Tanaka/Gulati', classic:'Classic 220−vek'};
+  toast(`Formula: ${fLabel[currentFormula] || currentFormula}`, 'success');
 }
 
 // ── Rider catalog ──────────────────────────────────────────────────────────
@@ -1106,7 +1108,8 @@ function calcMaxHr(birthYear, gender, birthDate) {
     age = new Date().getFullYear() - birthYear;
   }
   if (currentFormula === 'classic') return Math.max(1, 220 - age);
-  return Math.round(gender === 'F' ? 206 - 0.88 * age : 208 - 0.7 * age);
+  if (currentFormula === 'tanaka') return Math.round(gender === 'F' ? 206 - 0.88 * age : 208 - 0.7 * age);
+  return Math.round(211 - 0.64 * age); // HUNT (default)
 }
 
 async function loadRiderCatalog() {

@@ -166,7 +166,7 @@ class BleStrap:
             return
 
         zone        = calc_zone(hr, self.max_hr)
-        pct         = min(100, round(hr / self.max_hr * 100))
+        pct         = round(hr / self.max_hr * 100)
         elapsed_min = (now - prev_seen) / 60 if prev_seen > 0 else 0.0
 
         cal_inc  = 0.0

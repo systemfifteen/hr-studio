@@ -55,7 +55,7 @@ class AdminApi:
                 value TEXT NOT NULL
             )
         """)
-        db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES('hr_formula', 'tanaka')")
+        db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES('hr_formula', 'hunt')")
         db.commit()
         db.close()
 

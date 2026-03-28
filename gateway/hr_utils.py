@@ -11,17 +11,25 @@ def calc_age(birth_date: str = None, birth_year: int = None) -> int:
 
 
 def calc_max_hr(birth_year: int = None, gender: str = None, birth_date: str = None,
-                formula: str = "tanaka") -> int:
-    """Výpočet max HR. formula: 'tanaka' alebo 'classic' (220-vek)."""
+                formula: str = "hunt") -> int:
+    """Výpočet max HR.
+    formula:
+      'hunt'    — HUNT/Nes 2013: 211 − 0.64 × vek, jedno pohlavie (default)
+                  Používa Myzone. Najlepšia validácia pre aktívnu populáciu.
+      'tanaka'  — Tanaka 2001: 208 − 0.7 × vek (muži) / Gulati 2010: 206 − 0.88 × vek (ženy)
+      'classic' — Fox/Haskell 1971: 220 − vek
+    """
     age = calc_age(birth_date=birth_date, birth_year=birth_year)
     if formula == "classic":
         return max(1, 220 - age)
-    # Tanaka (default)
-    if gender and gender.upper() == "F":
-        mhr = 206 - (0.88 * age)
-    else:
-        mhr = 208 - (0.7 * age)
-    return round(mhr)
+    if formula == "tanaka":
+        if gender and gender.upper() == "F":
+            mhr = 206 - (0.88 * age)
+        else:
+            mhr = 208 - (0.7 * age)
+        return round(mhr)
+    # HUNT (default)
+    return round(211 - (0.64 * age))
 
 
 def calc_zone(hr: int, max_hr: int) -> int:
