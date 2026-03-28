@@ -130,6 +130,7 @@ input[type=number]{width:90px}
       <button class="btn btn-secondary" onclick="restartBt()" title="Reštartuje bluetooth službu na notebooku">🔵 Restart BT</button>
       <button class="btn btn-secondary" onclick="fixHdmi()" title="Zapne HDMI výstup na TV (1920x1080 mirror)">📺 Fix HDMI</button>
       <button class="btn btn-secondary" onclick="reloadDashboard()" title="Pošle reload všetkým pripojeným dashboardom (TV, prehliadač...)">⟳ Reload TV</button>
+      <button class="btn btn-danger btn-small" onclick="poweroffNotebook()" title="Vypne notebook">⏻ Vypnúť</button>
       <a href="/">← Dashboard</a>
     </div>
   </header>
@@ -1062,6 +1063,16 @@ async function restartBt() {
 async function fixHdmi() {
   const r = await fetch(`${API}/fix-hdmi`, { method: 'POST' });
   toast(r.ok ? 'HDMI aktivovaný' : 'HDMI chyba — skontroluj kábel', r.ok ? 'success' : 'error');
+}
+
+async function poweroffNotebook() {
+  if (!confirm('Naozaj vypnúť notebook? Hodina sa ukončí a všetky pásy sa odpoja.')) return;
+  const r = await fetch(`${API}/poweroff`, { method: 'POST' });
+  if (r.ok) {
+    toast('Notebook sa vypína...', 'success');
+  } else {
+    toast('Chyba — notebook sa nevypol (poweroff-helper beží?)', 'error');
+  }
 }
 
 async function reloadDashboard() {

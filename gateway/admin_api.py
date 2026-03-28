@@ -100,6 +100,9 @@ class AdminApi:
         if method == "POST" and path == "/restart-bt":
             return await self._restart_bt()
 
+        if method == "POST" and path == "/poweroff":
+            return await self._poweroff()
+
         if method == "GET" and path == "/scan":
             return await self._scan()
 
@@ -606,6 +609,14 @@ class AdminApi:
         import urllib.request
         try:
             urllib.request.urlopen("http://127.0.0.1:8767/fix-hdmi", data=b"", timeout=5)
+            return 200, {"ok": True}
+        except Exception as e:
+            return 500, {"error": str(e)}
+
+    async def _poweroff(self):
+        import urllib.request
+        try:
+            urllib.request.urlopen("http://127.0.0.1:8769/poweroff", data=b"", timeout=5)
             return 200, {"ok": True}
         except Exception as e:
             return 500, {"error": str(e)}
