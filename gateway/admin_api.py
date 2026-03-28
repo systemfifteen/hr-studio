@@ -41,10 +41,14 @@ class AdminApi:
                 max_hr_override INTEGER
             )
         """)
-        # Migrácia: pridaj birth_date ak ešte neexistuje
+        # Migrácia: pridaj birth_date do riders_catalog ak ešte neexistuje
         cols = [r[1] for r in db.execute("PRAGMA table_info(riders_catalog)").fetchall()]
         if "birth_date" not in cols:
             db.execute("ALTER TABLE riders_catalog ADD COLUMN birth_date TEXT")
+        # Migrácia: pridaj birth_date do riders_cache ak ešte neexistuje
+        cols = [r[1] for r in db.execute("PRAGMA table_info(riders_cache)").fetchall()]
+        if "birth_date" not in cols:
+            db.execute("ALTER TABLE riders_cache ADD COLUMN birth_date TEXT")
         db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
@@ -435,13 +439,13 @@ class AdminApi:
     def _get_riders(self):
         db   = self._db()
         rows = db.execute(
-            "SELECT bike_position, name, max_hr, weight_kg, birth_year, gender "
+            "SELECT bike_position, name, max_hr, weight_kg, birth_year, gender, birth_date "
             "FROM riders_cache ORDER BY bike_position"
         ).fetchall()
         db.close()
         return [
             {"bike_position": r[0], "name": r[1], "max_hr": r[2],
-             "weight_kg": r[3], "birth_year": r[4], "gender": r[5]}
+             "weight_kg": r[3], "birth_year": r[4], "gender": r[5], "birth_date": r[6]}
             for r in rows
         ]
 
@@ -462,6 +466,7 @@ class AdminApi:
         else:
             name       = (data.get("name") or "").strip()
             birth_year = data.get("birth_year")
+            birth_date = (data.get("birth_date") or "").strip() or None
             weight_kg  = data.get("weight_kg")
             gender     = (data.get("gender") or "M").upper()
             if not name:
@@ -469,16 +474,17 @@ class AdminApi:
             if not birth_year:
                 return 400, {"error": "birth_year required"}
             formula = self._get_formula()
-            max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender, formula=formula)
+            max_hr = data.get("max_hr") or calc_max_hr(int(birth_year), gender, birth_date=birth_date, formula=formula)
         db = self._db()
         db.execute("""
-            INSERT INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender)
-            VALUES(?,?,?,?,?,?)
+            INSERT INTO riders_cache(bike_position, name, max_hr, weight_kg, birth_year, gender, birth_date)
+            VALUES(?,?,?,?,?,?,?)
             ON CONFLICT(bike_position) DO UPDATE SET
                 name=excluded.name, max_hr=excluded.max_hr,
                 weight_kg=excluded.weight_kg, birth_year=excluded.birth_year,
-                gender=excluded.gender, synced_at=CURRENT_TIMESTAMP
-        """, (position, name, max_hr, weight_kg, int(birth_year), gender))
+                gender=excluded.gender, birth_date=excluded.birth_date,
+                synced_at=CURRENT_TIMESTAMP
+        """, (position, name, max_hr, weight_kg, int(birth_year), gender, birth_date))
         db.commit()
         db.close()
         await self._reload()

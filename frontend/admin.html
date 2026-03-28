@@ -474,7 +474,7 @@ function renderBikes() {
       <td>${b.label}</td>
       <td>${b.rider
         ? `<span style="font-size:12px">${b.rider.name}
-             <span style="color:#666;margin-left:4px">${b.rider.birth_year ? new Date().getFullYear()-b.rider.birth_year+'r' : ''} ${b.rider.weight_kg ? b.rider.weight_kg+'kg' : ''} max${b.rider.max_hr}</span>
+             <span style="color:#666;margin-left:4px">${(()=>{const r=b.rider;if(r.birth_date){const[y,m,d]=r.birth_date.split('-').map(Number);const t=new Date();const age=t.getFullYear()-y-((t.getMonth()+1)*100+t.getDate()<m*100+d?1:0);return age+'r';}return r.birth_year?new Date().getFullYear()-r.birth_year+'r':'';})()} ${b.rider.weight_kg ? b.rider.weight_kg+'kg' : ''} max${b.rider.max_hr}</span>
            </span>`
         : '<span style="color:#444;font-size:12px">—</span>'}</td>
       <td>${b.strap
