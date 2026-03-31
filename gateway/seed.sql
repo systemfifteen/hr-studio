@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS bikes (
     ant_channel INTEGER
 );
 
--- 18 bicyklov podľa fyzického layoutu spinning sály
+-- 18 bicyklov podľa fyzického layoutu spinning sály + X2 (testovací)
 -- position = bike.number z FitReserve, label = fyzický štítok na bicykli
 INSERT OR IGNORE INTO bikes(id, position, label) VALUES
     ( 1,  1, '2'),
@@ -29,7 +29,8 @@ INSERT OR IGNORE INTO bikes(id, position, label) VALUES
     (15, 15, '10'),
     (16, 16, '11'),
     (17, 17, '12'),
-    (18, 18, '13');
+    (18, 18, '13'),
+    (19, 19, 'X2');
 
 CREATE TABLE IF NOT EXISTS straps (
     id INTEGER PRIMARY KEY,
@@ -38,12 +39,9 @@ CREATE TABLE IF NOT EXISTS straps (
     label TEXT
 );
 
--- BLE pásy priradené k bicyklom
+-- Rusinkův pás na X2 (bike id 19)
 INSERT OR IGNORE INTO straps(id, ble_address, bike_id, label) VALUES
-    (2, 'D3:B3:0B:C7:0A:88',  7, ''),
-    (3, 'E2:17:78:4D:F5:48', 13, ''),
-    (4, 'EE:9C:B9:BD:20:AD',  1, ''),
-    (5, 'D1:6E:D6:44:13:15', 15, 'D1:6E:D6:44:13:15');
+    (5, 'D1:6E:D6:44:13:15', 19, 'MYZONE-0003222279');
 
 CREATE TABLE IF NOT EXISTS riders_cache (
     bike_position INTEGER PRIMARY KEY,
@@ -76,9 +74,6 @@ CREATE TABLE IF NOT EXISTS riders_catalog (
 
 -- Stáli jazdci
 INSERT OR IGNORE INTO riders_catalog(id, name, birth_year, weight_kg, gender) VALUES
-    (1, 'rusinka', 1972, 85.0, 'M'),
-    (2, 'PP',      1973, 89.0, 'M'),
-    (3, 'Sona',    1985, 60.0, 'F'),
-    (4, '15',      1978, 115.0, 'M');
+    (1, 'rusinka', 1972, 85.0, 'M');
 
 COMMIT;
