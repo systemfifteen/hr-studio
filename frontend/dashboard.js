@@ -96,7 +96,11 @@ function handleMessage(msg) {
 }
 
 function renderGrid() {
-  const positions = Object.keys(riders).map(Number).sort((a, b) => a - b);
+  const positions = Object.keys(riders).map(Number).sort((a, b) => {
+    const nameA = (riders[a].name || '').toLowerCase();
+    const nameB = (riders[b].name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
   const count = positions.length;
   const cols = count === 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
   const rows = Math.ceil(count / cols);
