@@ -54,6 +54,10 @@ class AdminApi:
         cols = [r[1] for r in db.execute("PRAGMA table_info(straps)").fetchall()]
         if "ant_device_id" not in cols:
             db.execute("ALTER TABLE straps ADD COLUMN ant_device_id INTEGER")
+        # Migrácia: pridaj ant_device_id do strap_catalog ak ešte neexistuje
+        cols = [r[1] for r in db.execute("PRAGMA table_info(strap_catalog)").fetchall()]
+        if "ant_device_id" not in cols:
+            db.execute("ALTER TABLE strap_catalog ADD COLUMN ant_device_id INTEGER")
         db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
@@ -257,11 +261,11 @@ class AdminApi:
     def _get_catalog(self):
         db = self._db()
         rows = db.execute(
-            "SELECT id, label, ble_name, ble_address FROM strap_catalog ORDER BY id"
+            "SELECT id, label, ble_name, ble_address, ant_device_id FROM strap_catalog ORDER BY id"
         ).fetchall()
         db.close()
         return [
-            {"id": r[0], "label": r[1], "ble_name": r[2], "ble_address": r[3]}
+            {"id": r[0], "label": r[1], "ble_name": r[2], "ble_address": r[3], "ant_device_id": r[4]}
             for r in rows
         ]
 
@@ -269,13 +273,17 @@ class AdminApi:
         label       = (data.get("label") or "").strip()
         ble_name    = (data.get("ble_name") or "").strip() or None
         ble_address = (data.get("ble_address") or "").strip().upper() or None
+        ant_id      = data.get("ant_device_id")
+        if ant_id is not None:
+            try: ant_id = int(ant_id)
+            except (TypeError, ValueError): ant_id = None
         if not label:
             return 400, {"error": "label required"}
         try:
             db = self._db()
             db.execute(
-                "INSERT INTO strap_catalog(label, ble_name, ble_address) VALUES(?,?,?)",
-                (label, ble_name, ble_address),
+                "INSERT INTO strap_catalog(label, ble_name, ble_address, ant_device_id) VALUES(?,?,?,?)",
+                (label, ble_name, ble_address, ant_id),
             )
             db.commit()
             db.close()
@@ -287,13 +295,17 @@ class AdminApi:
         label       = (data.get("label") or "").strip()
         ble_name    = (data.get("ble_name") or "").strip() or None
         ble_address = (data.get("ble_address") or "").strip().upper() or None
+        ant_id      = data.get("ant_device_id")
+        if ant_id is not None:
+            try: ant_id = int(ant_id)
+            except (TypeError, ValueError): ant_id = None
         if not label:
             return 400, {"error": "label required"}
         try:
             db = self._db()
             db.execute(
-                "UPDATE strap_catalog SET label=?, ble_name=?, ble_address=? WHERE id=?",
-                (label, ble_name, ble_address, catalog_id),
+                "UPDATE strap_catalog SET label=?, ble_name=?, ble_address=?, ant_device_id=? WHERE id=?",
+                (label, ble_name, ble_address, ant_id, catalog_id),
             )
             db.commit()
             db.close()

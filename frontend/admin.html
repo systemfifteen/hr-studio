@@ -224,18 +224,20 @@ input[type=number]{width:90px}
           <th>Label</th>
           <th>BLE Name</th>
           <th>MAC adresa</th>
+          <th>ANT+ ID</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="catalog-tbody">
-        <tr><td colspan="4" class="empty">Načítavam...</td></tr>
+        <tr><td colspan="5" class="empty">Načítavam...</td></tr>
       </tbody>
     </table>
     <div style="margin-top:12px">
       <div class="form-row">
-        <input type="text" id="cat-label" placeholder="Label (napr. MZ-001)" style="width:160px">
-        <input type="text" id="cat-ble-name" placeholder="BLE Name (napr. MYZONE-…)" style="width:220px">
-        <input type="text" id="cat-ble-addr" placeholder="MAC (napr. D1:6E:D6:44:13:15)" style="width:200px">
+        <input type="text" id="cat-label" placeholder="Label (napr. 1)" style="width:100px">
+        <input type="text" id="cat-ble-name" placeholder="BLE Name (napr. MYZONE-…)" style="width:200px">
+        <input type="text" id="cat-ble-addr" placeholder="MAC (napr. D1:6E:D6:44:13:15)" style="width:185px">
+        <input type="number" id="cat-ant-id" placeholder="ANT+ ID" style="width:90px">
         <button class="btn btn-primary" onclick="addToCatalog()">+ Pridať</button>
       </div>
     </div>
@@ -522,7 +524,7 @@ async function loadStrapCatalog() {
     renderCatalog();
   } catch(e) {
     document.getElementById('catalog-tbody').innerHTML =
-      '<tr><td colspan="4" class="empty">Chyba načítania</td></tr>';
+      '<tr><td colspan="5" class="empty">Chyba načítania</td></tr>';
   }
 }
 
@@ -530,7 +532,7 @@ function renderCatalog() {
   document.getElementById('catalog-count').textContent = catalog.length;
   const tbody = document.getElementById('catalog-tbody');
   if (!catalog.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty">Katalóg je prázdny — pridaj pásy pomocou formulára nižšie</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Katalóg je prázdny — pridaj pásy pomocou formulára nižšie</td></tr>';
     return;
   }
   tbody.innerHTML = catalog.map(c => `
@@ -538,6 +540,7 @@ function renderCatalog() {
       <td><strong>${c.label}</strong></td>
       <td style="color:#888;font-size:12px">${c.ble_name || '—'}</td>
       <td class="ble-addr">${c.ble_address || '—'}</td>
+      <td>${c.ant_device_id ? `<span style="color:#7aadff;font-size:12px;font-family:monospace">${c.ant_device_id}</span>` : '<span style="color:#333">—</span>'}</td>
       <td style="text-align:right">
         <button class="btn btn-small" onclick="openEditCatalog(${c.id})">✏ Edit</button>
         <button class="btn btn-danger btn-small" onclick="deleteCatalogEntry(${c.id})">✕ Zmazať</button>
@@ -547,20 +550,23 @@ function renderCatalog() {
 }
 
 async function addToCatalog() {
-  const label      = document.getElementById('cat-label').value.trim();
-  const ble_name   = document.getElementById('cat-ble-name').value.trim();
+  const label       = document.getElementById('cat-label').value.trim();
+  const ble_name    = document.getElementById('cat-ble-name').value.trim();
   const ble_address = document.getElementById('cat-ble-addr').value.trim();
+  const ant_raw     = document.getElementById('cat-ant-id').value.trim();
+  const ant_device_id = ant_raw ? parseInt(ant_raw) : null;
   if (!label) { toast('Label je povinný', 'error'); return; }
   const r = await fetch(`${API}/strap-catalog`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ label, ble_name: ble_name || null, ble_address: ble_address || null }),
+    body: JSON.stringify({ label, ble_name: ble_name || null, ble_address: ble_address || null, ant_device_id }),
   });
   if (r.ok) {
     toast('Pás pridaný do katalógu', 'success');
     document.getElementById('cat-label').value = '';
     document.getElementById('cat-ble-name').value = '';
     document.getElementById('cat-ble-addr').value = '';
+    document.getElementById('cat-ant-id').value = '';
     loadStrapCatalog();
   } else if (r.status === 409) {
     toast('Táto MAC adresa už je v katalógu', 'error');
@@ -899,7 +905,11 @@ async function loadStrapStatus() {
     const r = await fetch(`${API}/straps/status`);
     const list = await r.json();
     strapStatus = {};
-    list.forEach(s => { strapStatus[s.position] = s; });
+    list.forEach(s => {
+      const prev = strapStatus[s.position];
+      // Ak na tej istej pozícii máme viac transportov, preferuj connected
+      if (!prev || s.connected) strapStatus[s.position] = s;
+    });
     updateStrapDots();
   } catch(e) {}
 }
@@ -908,10 +918,11 @@ function updateStrapDots() {
   document.querySelectorAll('[data-strap-pos]').forEach(el => {
     const pos = parseInt(el.dataset.strapPos);
     const s   = strapStatus[pos];
+    const tr  = s?.transport ? `<span style="color:#444;font-size:10px;margin-left:4px">${s.transport.toUpperCase()}</span>` : '';
     if (s?.connected) {
-      el.innerHTML = `<span class="connected-dot dot-on"></span><span style="color:#4caf78;font-size:12px">♥ ${s.last_hr} bpm</span>`;
+      el.innerHTML = `<span class="connected-dot dot-on"></span><span style="color:#4caf78;font-size:12px">♥ ${s.last_hr} bpm</span>${tr}`;
     } else if (s) {
-      el.innerHTML = `<span class="connected-dot dot-off"></span><span style="color:#555;font-size:12px">offline</span>`;
+      el.innerHTML = `<span class="connected-dot dot-off"></span><span style="color:#555;font-size:12px">offline</span>${tr}`;
     } else {
       el.innerHTML = `<span style="color:#333;font-size:12px">—</span>`;
     }
@@ -1291,6 +1302,7 @@ function openEditCatalog(id) {
   document.getElementById('ec-label').value       = c.label || '';
   document.getElementById('ec-ble-name').value    = c.ble_name || '';
   document.getElementById('ec-ble-address').value = c.ble_address || '';
+  document.getElementById('ec-ant-id').value      = c.ant_device_id || '';
   document.getElementById('ec-modal').style.display = 'flex';
 }
 
@@ -1304,11 +1316,13 @@ async function saveEditCatalog() {
   const label       = document.getElementById('ec-label').value.trim();
   const ble_name    = document.getElementById('ec-ble-name').value.trim() || null;
   const ble_address = document.getElementById('ec-ble-address').value.trim() || null;
+  const ant_raw     = document.getElementById('ec-ant-id').value.trim();
+  const ant_device_id = ant_raw ? parseInt(ant_raw) : null;
   if (!label) { toast('Label je povinný', 'error'); return; }
   const r = await fetch(`${API}/strap-catalog/${_editCatalogId}`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ label, ble_name, ble_address }),
+    body: JSON.stringify({ label, ble_name, ble_address, ant_device_id }),
   });
   if (r.ok) {
     toast('Pás aktualizovaný', 'success');
@@ -1343,6 +1357,7 @@ async function saveEditCatalog() {
     <div class="form-row"><label>Label (nálepka)</label><input id="ec-label" placeholder="napr. 1"></div>
     <div class="form-row"><label>BLE meno</label><input id="ec-ble-name" placeholder="napr. MYZONE-0003222279"></div>
     <div class="form-row"><label>MAC adresa</label><input id="ec-ble-address" placeholder="napr. D1:6E:D6:44:13:15"></div>
+    <div class="form-row"><label>ANT+ ID</label><input id="ec-ant-id" type="number" placeholder="napr. 30763" style="width:120px"></div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn" onclick="saveEditCatalog()" style="flex:1">Uložiť</button>
       <button class="btn btn-danger" onclick="closeEditCatalog()" style="flex:1">Zrušiť</button>
