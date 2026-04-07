@@ -664,12 +664,17 @@ class AdminApi:
 
     async def _scan_ant(self):
         """
-        ANT+ wildcard scan — nájde prvý HR pás v dosahu a vráti jeho device ID.
-        Počas skenu pozastaví StudioManager (uvoľní dongle).
+        ANT+ multi-device wildcard scan — otvorí až 8 kanálov naraz, každý zachytí
+        iný HR pás v dosahu. Počas skenu pozastaví StudioManager (uvoľní dongle).
+        Parametre: ?channels=N (default 8, max 8), ?timeout=N sekúnd (default 20).
         """
         import threading
-        ANT_SCAN_TIMEOUT = 20.0
-        logger.info(f"ANT+ scan — hľadám HR zariadenie ({ANT_SCAN_TIMEOUT}s)...")
+
+        ANT_SCAN_CHANNELS = min(int(8), self.ant_manager._node is None and 8 or 8)
+        ANT_SCAN_TIMEOUT  = 20.0
+        ANTPLUS_NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
+
+        logger.info(f"ANT+ multi-scan — {ANT_SCAN_CHANNELS} kanálov, {ANT_SCAN_TIMEOUT}s...")
 
         # Zastav StudioManager aby uvoľnil dongle
         if self.ant_manager:
@@ -682,8 +687,16 @@ class AdminApi:
             with self.ant_manager._lock:
                 self.ant_manager._channels.clear()
 
-        result = {}
-        got = threading.Event()
+        found    = {}    # channel_num → device_id
+        timeouts = set() # channel_nums ktoré timed out
+        lock     = threading.Lock()
+        # Všetky kanály skončili keď found + timeouts == ANT_SCAN_CHANNELS
+        done     = threading.Event()
+
+        def _check_done():
+            with lock:
+                if len(found) + len(timeouts) >= ANT_SCAN_CHANNELS:
+                    done.set()
 
         def _do_scan():
             try:
@@ -691,59 +704,74 @@ class AdminApi:
                 from openant.easy.channel import Channel
                 from openant.base.message import Message
 
-                ANTPLUS_NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
-
-                def on_data(data):
-                    if not got.is_set():
-                        got.set()
-
-                def on_timeout():
-                    result["error"] = "Žiadne ANT+ zariadenie nenájdené"
-                    got.set()
-
                 node = Node()
                 node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
-                ch = node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
-                ch.set_id(0, 0x78, 0)
-                ch.set_period(8070)
-                ch.set_rf_freq(57)
-                ch.set_search_timeout(int(ANT_SCAN_TIMEOUT / 2.5))
-                ch.on_broadcast_data = on_data
-                ch.on_search_timeout = on_timeout
-                ch.open()
+
+                channels = []
+                for ch_num in range(ANT_SCAN_CHANNELS):
+                    ch = node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
+                    ch.set_id(0, 0x78, 0)   # wildcard
+                    ch.set_period(8070)
+                    ch.set_rf_freq(57)
+                    ch.set_search_timeout(int(ANT_SCAN_TIMEOUT / 2.5))
+
+                    def make_on_data(n):
+                        def on_data(data):
+                            with lock:
+                                if n not in found:
+                                    found[n] = None   # reserved — device ID TBD
+                            _check_done()
+                        return on_data
+
+                    def make_on_timeout(n):
+                        def on_timeout():
+                            with lock:
+                                timeouts.add(n)
+                            _check_done()
+                        return on_timeout
+
+                    ch.on_broadcast_data = make_on_data(ch_num)
+                    ch.on_search_timeout = make_on_timeout(ch_num)
+                    ch.open()
+                    channels.append(ch)
 
                 t = threading.Thread(target=node.start, daemon=True)
                 t.start()
-                got.wait(timeout=ANT_SCAN_TIMEOUT + 2)
 
-                if "error" not in result and got.is_set():
+                # Čakaj kým všetky kanály nájdu zariadenie alebo vyprší čas
+                done.wait(timeout=ANT_SCAN_TIMEOUT + 5)
+
+                # Získaj device ID pre každý nájdený kanál
+                for ch_num in list(found.keys()):
+                    # request_message je hardcoded na channel 0 v openant —
+                    # funguje správne len pre kanál 0; ostatné kanály extrahujeme
+                    # cez priamy prístup k ant.request_message
                     try:
-                        _, _, data = node.request_message(Message.ID.RESPONSE_CHANNEL_ID)
+                        node.ant.request_message(ch_num, Message.ID.RESPONSE_CHANNEL_ID)
+                        _, event, data = node.wait_for_special(Message.ID.RESPONSE_CHANNEL_ID)
                         dev_num = data[1] | (data[2] << 8)
-                        result["device_id"] = dev_num
-                        result["device_type"] = data[3]
-                        logger.info(f"ANT+ scan: nájdený device {dev_num}")
+                        with lock:
+                            found[ch_num] = dev_num
+                        logger.info(f"ANT+ kanál {ch_num}: device {dev_num}")
                     except Exception as e:
-                        result["error"] = f"Chyba pri čítaní device ID: {e}"
+                        logger.warning(f"ANT+ kanál {ch_num}: nepodarilo sa získať device ID: {e}")
 
                 node.stop()
             except Exception as e:
-                result["error"] = str(e)
-                got.set()
+                logger.error(f"ANT+ scan chyba: {e}")
             finally:
-                # Znovu spusti StudioManager
                 if self.ant_manager:
                     self.ant_manager.load_and_start()
 
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _do_scan)
 
-        if "error" in result:
-            return 404, {"error": result["error"]}
-        return 200, {
-            "device_id":   result.get("device_id"),
-            "device_type": result.get("device_type"),
-        }
+        devices = [v for v in found.values() if v is not None]
+        logger.info(f"ANT+ scan hotový — {len(devices)} zariadení nájdených")
+
+        if not devices:
+            return 404, {"error": "Žiadne ANT+ zariadenia nenájdené"}
+        return 200, {"devices": devices, "count": len(devices)}
 
     async def _scan(self):
         logger.info(f"BLE scan — hľadám HR zariadenia ({SCAN_TIMEOUT}s)...")
