@@ -1,8 +1,6 @@
-import sqlite3
 import threading
 import logging
-from collections import defaultdict
-from strap_channel import StrapChannel
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -11,102 +9,101 @@ ANTPLUS_NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
 
 class StudioManager:
     """
-    Načíta konfig z lokálnej SQLite cache a otvorí ANT+ kanály.
-    Každý dongle beží v samostatnom daemone vlákne.
+    Manages one ANT+ USB dongle and opens HR channels for paired straps.
+    Straps must have ant_device_id set in the DB.
+    Runs openant in a daemon thread (synchronous library).
     """
 
-    def __init__(self, cache_db: str, broadcast_fn, event_loop):
+    def __init__(self, cache_db: str, broadcast_fn, event_loop, session_mgr=None):
         self.cache_db    = cache_db
         self.broadcast   = broadcast_fn
         self.loop        = event_loop
-        self.nodes       = {}     # port → Node
-        self.channels    = {}     # ant_device_id → StrapChannel
+        self.session_mgr = session_mgr
+        self._node       = None
+        self._channels   = {}   # ant_device_id → StrapChannel
         self._lock       = threading.Lock()
 
-    def load_and_start(self):
-        db   = sqlite3.connect(self.cache_db)
+    def _load_rows(self) -> list:
+        db = sqlite3.connect(self.cache_db)
         rows = db.execute("""
             SELECT s.ant_device_id,
                    b.position,
-                   b.dongle_port,
-                   b.ant_channel,
+                   b.label,
                    r.name,
                    r.max_hr,
                    r.weight_kg,
                    r.birth_year,
                    r.gender
             FROM   straps s
-            JOIN   bikes b         ON b.id = s.bike_id
-            JOIN   riders_cache r  ON r.bike_position = b.position
+            JOIN   bikes b        ON b.id = s.bike_id
+            JOIN   riders_cache r ON r.bike_position = b.position
+            WHERE  s.ant_device_id IS NOT NULL
         """).fetchall()
         db.close()
+        return rows
 
+    def load_and_start(self):
+        rows = self._load_rows()
         if not rows:
-            logger.warning("Žiadni riders v cache — spúšťam bez kanálov")
+            logger.info("Žiadne ANT+ pásy nakonfigurované — preskakujem")
             return
 
-        by_dongle = defaultdict(list)
-        for row in rows:
-            by_dongle[row[2]].append(row)
-
-        for port, straps in by_dongle.items():
-            self._start_dongle(port, straps)
-
-        logger.info(f"StudioManager štart — {len(rows)} kanálov na {len(by_dongle)} dongle")
-
-    def _start_dongle(self, port: str, straps: list):
         try:
             from ant.easy.node import Node
-            from ant.base.driver import SerialDriver
-            node = Node(driver=SerialDriver(port))
+            node = Node()
             node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
-            self.nodes[port] = node
-
-            for (dev_id, position, _, ch_num, name, max_hr, weight_kg, birth_year, gender) in straps:
-                ch = StrapChannel(
-                    node          = node,
-                    channel_num   = ch_num,
-                    ant_device_id = dev_id,
-                    bike_position = position,
-                    rider_name    = name,
-                    max_hr        = max_hr,
-                    weight_kg     = weight_kg,
-                    birth_year    = birth_year,
-                    gender        = gender,
-                    broadcast_fn  = self.broadcast,
-                    event_loop    = self.loop,
-                )
-                with self._lock:
-                    self.channels[dev_id] = ch
-
-            t = threading.Thread(target=node.start, daemon=True, name=f"dongle-{port}")
-            t.start()
-            logger.info(f"Dongle {port} štartovaný ({len(straps)} kanálov)")
-
+            self._node = node
         except Exception as e:
-            logger.error(f"Dongle {port} failed: {e}")
+            logger.error(f"ANT+ dongle sa nedá inicializovať: {e}")
+            return
+
+        from strap_channel import StrapChannel
+        for ch_num, (dev_id, position, bike_label, name, max_hr, weight_kg, birth_year, gender) in enumerate(rows):
+            ch = StrapChannel(
+                node          = node,
+                channel_num   = ch_num,
+                ant_device_id = dev_id,
+                bike_position = position,
+                bike_label    = bike_label,
+                rider_name    = name,
+                max_hr        = max_hr,
+                weight_kg     = weight_kg,
+                birth_year    = birth_year,
+                gender        = gender,
+                broadcast_fn  = self.broadcast,
+                event_loop    = self.loop,
+                session_mgr   = self.session_mgr,
+            )
+            with self._lock:
+                self._channels[dev_id] = ch
+
+        t = threading.Thread(target=self._node.start, daemon=True, name="ant-dongle")
+        t.start()
+        logger.info(f"ANT+ manager štart — {len(rows)} kanálov")
 
     def reload(self):
-        """Zavolaj po sync — zatvorí staré kanály a otvorí nové."""
-        logger.info("Reload kanálov z aktualizovanej cache...")
-        for port, node in self.nodes.items():
+        """Zastaví dongle a znovu načíta konfig."""
+        if self._node:
             try:
-                node.stop()
+                self._node.stop()
             except Exception:
                 pass
-        self.nodes.clear()
-        self.channels.clear()
+            self._node = None
+        with self._lock:
+            self._channels.clear()
         self.load_and_start()
 
     def get_status(self) -> list:
         with self._lock:
             return [
                 {
-                    "position":  ch.bike_position,
-                    "name":      ch.rider_name,
-                    "connected": ch.connected,
-                    "hr":        ch.last_hr,
-                    "device_id": ch.ant_device_id,
+                    "position":      ch.bike_position,
+                    "bike_label":    ch.bike_label,
+                    "name":          ch.rider_name,
+                    "connected":     ch.connected,
+                    "hr":            ch.last_hr,
+                    "battery":       None,
+                    "ant_device_id": ch.ant_device_id,
                 }
-                for ch in self.channels.values()
+                for ch in self._channels.values()
             ]

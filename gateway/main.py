@@ -6,6 +6,7 @@ import time
 
 import websockets
 from ble_manager import BleManager
+from studio_manager import StudioManager
 from admin_api import AdminApi
 from session_manager import SessionManager   # sekúnd
 
@@ -22,6 +23,7 @@ WATCHDOG_TIMEOUT = 5    # sekúnd bez signálu = pás odpojený
 
 connected_clients: set = set()
 manager: BleManager | None = None
+ant_manager: StudioManager | None = None
 admin_api: AdminApi | None = None
 session_mgr: SessionManager | None = None
 
@@ -40,10 +42,15 @@ async def ws_handler(ws, path):
     connected_clients.add(ws)
     logger.info(f"Klient pripojený: {ws.remote_address} (celkom: {len(connected_clients)})")
 
+    all_riders = []
     if manager:
+        all_riders.extend(manager.get_status())
+    if ant_manager:
+        all_riders.extend(ant_manager.get_status())
+    if all_riders:
         await ws.send(json.dumps({
             "type":   "initial_state",
-            "riders": manager.get_status(),
+            "riders": all_riders,
         }))
 
     try:
@@ -164,7 +171,7 @@ def ensure_bikes():
 
 
 async def main():
-    global manager, admin_api, session_mgr
+    global manager, ant_manager, admin_api, session_mgr
 
     ensure_bikes()
     session_mgr = SessionManager(cache_db=CACHE_DB, broadcast_fn=broadcast)
@@ -176,11 +183,20 @@ async def main():
     )
     await manager.load_and_start()
 
+    ant_manager = StudioManager(
+        cache_db    = CACHE_DB,
+        broadcast_fn= broadcast,
+        event_loop  = asyncio.get_running_loop(),
+        session_mgr = session_mgr,
+    )
+    ant_manager.load_and_start()
+
     admin_api = AdminApi(
         cache_db    = CACHE_DB,
         manager     = manager,
         broadcast_fn= broadcast,
         session_mgr = session_mgr,
+        ant_manager = ant_manager,
     )
 
     reload_server = await asyncio.start_server(

@@ -35,6 +35,7 @@ INSERT OR IGNORE INTO bikes(id, position, label) VALUES
 CREATE TABLE IF NOT EXISTS straps (
     id INTEGER PRIMARY KEY,
     ble_address TEXT,
+    ant_device_id INTEGER,
     bike_id INTEGER REFERENCES bikes(id),
     label TEXT
 );

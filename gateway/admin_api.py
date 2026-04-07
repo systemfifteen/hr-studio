@@ -14,9 +14,10 @@ SCAN_TIMEOUT = 10.0
 
 
 class AdminApi:
-    def __init__(self, cache_db: str, manager, broadcast_fn, session_mgr=None):
+    def __init__(self, cache_db: str, manager, broadcast_fn, session_mgr=None, ant_manager=None):
         self.cache_db     = cache_db
         self.manager      = manager
+        self.ant_manager  = ant_manager
         self.broadcast_fn = broadcast_fn
         self.session_mgr  = session_mgr
         self._ensure_catalog_table()
@@ -49,6 +50,10 @@ class AdminApi:
         cols = [r[1] for r in db.execute("PRAGMA table_info(riders_cache)").fetchall()]
         if "birth_date" not in cols:
             db.execute("ALTER TABLE riders_cache ADD COLUMN birth_date TEXT")
+        # Migrácia: pridaj ant_device_id do straps ak ešte neexistuje
+        cols = [r[1] for r in db.execute("PRAGMA table_info(straps)").fetchall()]
+        if "ant_device_id" not in cols:
+            db.execute("ALTER TABLE straps ADD COLUMN ant_device_id INTEGER")
         db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
@@ -425,19 +430,32 @@ class AdminApi:
         return {"last_sync_ok": 0, "cache_count": count}
 
     def _straps_status(self):
-        if not self.manager:
-            return []
-        return [
-            {
-                "ble_address": s.ble_address,
-                "position":    s.bike_position,
-                "name":        s.rider_name,
-                "connected":   s.connected,
-                "last_hr":     s.last_hr,
-                "battery":     s.battery,
-            }
-            for s in self.manager.straps.values()
-        ]
+        result = []
+        if self.manager:
+            for s in self.manager.straps.values():
+                result.append({
+                    "ble_address":   s.ble_address,
+                    "ant_device_id": None,
+                    "position":      s.bike_position,
+                    "name":          s.rider_name,
+                    "connected":     s.connected,
+                    "last_hr":       s.last_hr,
+                    "battery":       s.battery,
+                    "transport":     "ble",
+                })
+        if self.ant_manager:
+            for ch in self.ant_manager.get_status():
+                result.append({
+                    "ble_address":   None,
+                    "ant_device_id": ch["ant_device_id"],
+                    "position":      ch["position"],
+                    "name":          ch["name"],
+                    "connected":     ch["connected"],
+                    "last_hr":       ch["hr"],
+                    "battery":       None,
+                    "transport":     "ant",
+                })
+        return result
 
     def _get_riders(self):
         db   = self._db()
@@ -509,8 +527,8 @@ class AdminApi:
         result = []
         for bike_id, position, label in bikes:
             strap = db.execute(
-                "SELECT id, ble_address, label FROM straps "
-                "WHERE bike_id=? AND ble_address IS NOT NULL",
+                "SELECT id, ble_address, ant_device_id, label FROM straps "
+                "WHERE bike_id=?",
                 (bike_id,),
             ).fetchone()
             rider = db.execute(
@@ -522,8 +540,12 @@ class AdminApi:
                 "id":       bike_id,
                 "position": position,
                 "label":    label,
-                "strap":    {"id": strap[0], "ble_address": strap[1], "label": strap[2]}
-                            if strap else None,
+                "strap":    {
+                                "id":            strap[0],
+                                "ble_address":   strap[1],
+                                "ant_device_id": strap[2],
+                                "label":         strap[3],
+                            } if strap else None,
                 "rider":    {"name": rider[0], "max_hr": rider[1], "weight_kg": rider[2],
                              "birth_year": rider[3], "gender": rider[4], "birth_date": rider[5]}
                             if rider else None,
@@ -554,8 +576,9 @@ class AdminApi:
         return 200, {"ok": True}
 
     async def _assign_strap(self, bike_id, data):
-        addr  = (data.get("ble_address") or "").strip().upper()
-        label = (data.get("label") or "").strip()
+        addr      = (data.get("ble_address") or "").strip().upper() or None
+        ant_id    = data.get("ant_device_id")
+        label     = (data.get("label") or "").strip()
 
         # If catalog_id provided, look up address (and label) from catalog
         catalog_id = data.get("catalog_id")
@@ -573,13 +596,20 @@ class AdminApi:
             addr  = row[0].upper()
             label = label or row[1]
 
-        if not addr:
-            return 400, {"error": "ble_address required"}
+        if not addr and ant_id is None:
+            return 400, {"error": "ble_address or ant_device_id required"}
+
+        if ant_id is not None:
+            try:
+                ant_id = int(ant_id)
+            except (TypeError, ValueError):
+                return 400, {"error": "ant_device_id must be integer"}
+
         db = self._db()
         db.execute("DELETE FROM straps WHERE bike_id=?", (bike_id,))
         db.execute(
-            "INSERT INTO straps(ble_address, bike_id, label) VALUES(?,?,?)",
-            (addr, bike_id, label),
+            "INSERT INTO straps(ble_address, ant_device_id, bike_id, label) VALUES(?,?,?,?)",
+            (addr, ant_id, bike_id, label),
         )
         db.commit()
         db.close()
@@ -624,7 +654,9 @@ class AdminApi:
     async def _reload(self):
         if self.manager:
             await self.manager.reload()
-            await self.broadcast_fn({"type": "riders_updated"})
+        if self.ant_manager:
+            self.ant_manager.reload()
+        await self.broadcast_fn({"type": "riders_updated"})
         return 200, {"ok": True}
 
     async def _scan(self):

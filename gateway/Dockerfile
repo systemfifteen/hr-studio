@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y \
     bluez \
     dbus \
     sqlite3 \
+    libusb-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
