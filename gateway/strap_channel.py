@@ -50,7 +50,7 @@ class StrapChannel:
         self.total_meps     = 0.0
 
         try:
-            from ant.easy.channel import Channel
+            from openant.easy.channel import Channel
             ch = node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
             ch.set_id(ant_device_id, 0x78, 0)   # 0x78 = ANT+ HR profil
             ch.set_period(8070)                   # ~4 Hz

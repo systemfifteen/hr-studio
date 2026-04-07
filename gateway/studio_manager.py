@@ -49,7 +49,7 @@ class StudioManager:
             return
 
         try:
-            from ant.easy.node import Node
+            from openant.easy.node import Node
             node = Node()
             node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
             self._node = node
