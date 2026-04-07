@@ -105,6 +105,9 @@ class AdminApi:
         if method == "POST" and path == "/restart-bt":
             return await self._restart_bt()
 
+        if method == "POST" and path == "/restart-ant":
+            return await self._restart_ant()
+
         if method == "POST" and path == "/poweroff":
             return await self._poweroff()
 
@@ -609,6 +612,13 @@ class AdminApi:
                 return 400, {"error": "ant_device_id must be integer"}
 
         db = self._db()
+        # Zachovaj ant_device_id z existujúceho záznamu ak nie je v požiadavke
+        if ant_id is None:
+            existing = db.execute(
+                "SELECT ant_device_id FROM straps WHERE bike_id=?", (bike_id,)
+            ).fetchone()
+            if existing and existing[0] is not None:
+                ant_id = existing[0]
         db.execute("DELETE FROM straps WHERE bike_id=?", (bike_id,))
         db.execute(
             "INSERT INTO straps(ble_address, ant_device_id, bike_id, label) VALUES(?,?,?,?)",
@@ -653,6 +663,12 @@ class AdminApi:
             return 200, {"ok": True}
         except Exception as e:
             return 500, {"error": str(e)}
+
+    async def _restart_ant(self):
+        if self.ant_manager:
+            self.ant_manager.reload()
+            return 200, {"ok": True}
+        return 200, {"ok": True, "note": "ant_manager not running"}
 
     async def _reload(self):
         if self.manager:

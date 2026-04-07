@@ -128,6 +128,7 @@ input[type=number]{width:90px}
     <h1>HR Studio <span>Admin</span></h1>
     <div style="display:flex;gap:10px;align-items:center">
       <button class="btn btn-secondary" onclick="restartBt()" title="Reštartuje bluetooth službu na notebooku">🔵 Restart BT</button>
+      <button class="btn btn-secondary" onclick="restartAnt()" title="Reštartuje ANT+ dongle a znovu otvorí kanály">🔴 Restart ANT+</button>
       <button class="btn btn-secondary" onclick="fixHdmi()" title="Zapne HDMI výstup na TV (1920x1080 mirror)">📺 Fix HDMI</button>
       <button class="btn btn-secondary" onclick="reloadDashboard()" title="Pošle reload všetkým pripojeným dashboardom (TV, prehliadač...)">⟳ Reload TV</button>
       <button class="btn btn-danger btn-small" onclick="poweroffNotebook()" title="Vypne notebook">⏻ Vypnúť</button>
@@ -191,7 +192,7 @@ input[type=number]{width:90px}
 
   <!-- Bikes & straps -->
   <section>
-    <h2>Bicykle a BLE pásy <span class="badge warn" id="bikes-count">0</span></h2>
+    <h2>Bicykle a pásy <span class="badge warn" id="bikes-count">0</span></h2>
     <table class="tbl" id="bikes-table">
       <thead>
         <tr>
@@ -199,12 +200,13 @@ input[type=number]{width:90px}
           <th>Label</th>
           <th>Rider</th>
           <th>BLE adresa pásu</th>
+          <th>ANT+</th>
           <th>Live</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="bikes-tbody">
-        <tr><td colspan="5" class="empty">Načítavam...</td></tr>
+        <tr><td colspan="7" class="empty">Načítavam...</td></tr>
       </tbody>
     </table>
 
@@ -459,7 +461,7 @@ async function loadBikes() {
     renderBikes();
   } catch(e) {
     document.getElementById('bikes-tbody').innerHTML =
-      '<tr><td colspan="5" class="empty">Chyba načítania</td></tr>';
+      '<tr><td colspan="7" class="empty">Chyba načítania</td></tr>';
   }
 }
 
@@ -480,8 +482,11 @@ function renderBikes() {
            </span>`
         : '<span style="color:#444;font-size:12px">—</span>'}</td>
       <td>${b.strap
-        ? `<span class="ble-addr">${b.strap.label || b.strap.ble_address}</span><br><span style="color:#555;font-size:11px">${b.strap.ble_address}</span>`
+        ? `<span class="ble-addr">${b.strap.label || b.strap.ble_address || '—'}</span><br><span style="color:#555;font-size:11px">${b.strap.ble_address || '—'}</span>`
         : '<span style="color:#444">—</span>'}</td>
+      <td>${b.strap?.ant_device_id
+        ? `<span style="color:#7aadff;font-size:12px;font-family:monospace">${b.strap.ant_device_id}</span>`
+        : '<span style="color:#333;font-size:12px">—</span>'}</td>
       <td data-strap-pos="${b.position}"><span style="color:#333;font-size:12px">—</span></td>
       <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-secondary btn-small" onclick="editRider(${b.position}, ${JSON.stringify(b.rider||{}).replace(/"/g,'&quot;')})">👤 Rider</button>
@@ -1059,6 +1064,11 @@ function renderSessionDetail(riders, sessionId) {
 async function restartBt() {
   const r = await fetch(`${API}/restart-bt`, { method: 'POST' });
   toast(r.ok ? 'Bluetooth reštartovaný — pásy sa reconnectujú' : 'Chyba reštartu BT', r.ok ? 'success' : 'error');
+}
+
+async function restartAnt() {
+  const r = await fetch(`${API}/restart-ant`, { method: 'POST' });
+  toast(r.ok ? 'ANT+ reštartovaný — kanály sa znovu otvoria' : 'Chyba reštartu ANT+', r.ok ? 'success' : 'error');
 }
 
 async function fixHdmi() {
