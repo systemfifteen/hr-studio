@@ -40,9 +40,6 @@ CREATE TABLE IF NOT EXISTS straps (
     label TEXT
 );
 
--- Rusinkův pás na X2 (bike id 19)
-INSERT OR IGNORE INTO straps(id, ble_address, bike_id, label) VALUES
-    (5, 'D1:6E:D6:44:13:15', 19, 'MYZONE-0003222279');
 
 CREATE TABLE IF NOT EXISTS riders_cache (
     bike_position INTEGER PRIMARY KEY,
