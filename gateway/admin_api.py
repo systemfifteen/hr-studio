@@ -111,6 +111,9 @@ class AdminApi:
         if method == "GET" and path == "/scan":
             return await self._scan()
 
+        if method == "GET" and path == "/scan-ant":
+            return await self._scan_ant()
+
         # Riders
         if method == "GET" and path == "/straps/status":
             return 200, self._straps_status()
@@ -658,6 +661,89 @@ class AdminApi:
             self.ant_manager.reload()
         await self.broadcast_fn({"type": "riders_updated"})
         return 200, {"ok": True}
+
+    async def _scan_ant(self):
+        """
+        ANT+ wildcard scan — nájde prvý HR pás v dosahu a vráti jeho device ID.
+        Počas skenu pozastaví StudioManager (uvoľní dongle).
+        """
+        import threading
+        ANT_SCAN_TIMEOUT = 20.0
+        logger.info(f"ANT+ scan — hľadám HR zariadenie ({ANT_SCAN_TIMEOUT}s)...")
+
+        # Zastav StudioManager aby uvoľnil dongle
+        if self.ant_manager:
+            if self.ant_manager._node:
+                try:
+                    self.ant_manager._node.stop()
+                except Exception:
+                    pass
+                self.ant_manager._node = None
+            with self.ant_manager._lock:
+                self.ant_manager._channels.clear()
+
+        result = {}
+        got = threading.Event()
+
+        def _do_scan():
+            try:
+                from openant.easy.node import Node
+                from openant.easy.channel import Channel
+                from openant.base.message import Message
+
+                ANTPLUS_NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
+
+                def on_data(data):
+                    if not got.is_set():
+                        got.set()
+
+                def on_timeout():
+                    result["error"] = "Žiadne ANT+ zariadenie nenájdené"
+                    got.set()
+
+                node = Node()
+                node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+                ch = node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
+                ch.set_id(0, 0x78, 0)
+                ch.set_period(8070)
+                ch.set_rf_freq(57)
+                ch.set_search_timeout(int(ANT_SCAN_TIMEOUT / 2.5))
+                ch.on_broadcast_data = on_data
+                ch.on_search_timeout = on_timeout
+                ch.open()
+
+                t = threading.Thread(target=node.start, daemon=True)
+                t.start()
+                got.wait(timeout=ANT_SCAN_TIMEOUT + 2)
+
+                if "error" not in result and got.is_set():
+                    try:
+                        _, _, data = node.request_message(Message.ID.RESPONSE_CHANNEL_ID)
+                        dev_num = data[1] | (data[2] << 8)
+                        result["device_id"] = dev_num
+                        result["device_type"] = data[3]
+                        logger.info(f"ANT+ scan: nájdený device {dev_num}")
+                    except Exception as e:
+                        result["error"] = f"Chyba pri čítaní device ID: {e}"
+
+                node.stop()
+            except Exception as e:
+                result["error"] = str(e)
+                got.set()
+            finally:
+                # Znovu spusti StudioManager
+                if self.ant_manager:
+                    self.ant_manager.load_and_start()
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _do_scan)
+
+        if "error" in result:
+            return 404, {"error": result["error"]}
+        return 200, {
+            "device_id":   result.get("device_id"),
+            "device_type": result.get("device_type"),
+        }
 
     async def _scan(self):
         logger.info(f"BLE scan — hľadám HR zariadenia ({SCAN_TIMEOUT}s)...")
