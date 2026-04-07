@@ -189,8 +189,9 @@ async def main():
         event_loop  = asyncio.get_running_loop(),
         session_mgr = session_mgr,
     )
-    ant_manager.load_and_start()
 
+    # AdminApi sa inicializuje pred ant_manager.load_and_start() —
+    # _ensure_catalog_table() vykoná migráciu (pridá ant_device_id do straps)
     admin_api = AdminApi(
         cache_db    = CACHE_DB,
         manager     = manager,
@@ -198,6 +199,8 @@ async def main():
         session_mgr = session_mgr,
         ant_manager = ant_manager,
     )
+
+    ant_manager.load_and_start()
 
     reload_server = await asyncio.start_server(
         http_handler, "0.0.0.0", RELOAD_PORT
