@@ -2,118 +2,124 @@
 
 ## Čo je tento projekt
 
-Lokálny HR monitoring systém pre spinning štúdio (max 20 bicyklov).
-Číta dáta z ANT+ hrudných pásov v reálnom čase a zobrazuje ich na TV displeji.
-Integruje sa s externým rezervačným systémom cez REST API + webhook.
+Live HR monitoring systém pre spinning štúdio (max 20 bicyklov).
+Číta BLE (Myzone MZ-1) alebo ANT+ hrudné pásy, zobrazuje HR na TV dashboarde, ukladá session dáta, exportuje FIT súbory.
 
-**Súvisiaci projekt:** Rezervačný systém (samostatný repozitár) — poskytuje
-rider profily (meno, vek, váha, pohlavie) cez `GET /api/v1/studio/riders/today`.
+**Live URL (server):** https://hrstudio.system15.win
+**Notebook (štúdio):** 192.168.1.145 — tu beží BLE gateway pre reálne hodiny
+**Server:** 192.168.1.105 (Coolify) — záložná/testovacia inštancia
 
 ---
 
 ## Architektúra
 
 ```
-[ANT+ pásy] → [gateway] → [WebSocket] → [frontend dashboard]
-                              ↑
-[Cloud rezervák] → [sync service] → [lokálna SQLite cache]
+[BLE pásy MZ-1]  ──BLE──▶ ┐
+[ANT+ pásy]  ──USB dongle──▶ [gateway/] ──WebSocket 8765──▶ [frontend/]
+                                  │
+                                  └──REST 8766 (nginx /api/)──▶ admin panel
+                                  │
+                               [SQLite /data/local_cache.db]
 ```
 
-**Lokálny stack (Docker Compose):**
-- `gateway`  — Python, číta ANT+ dongles, broadcastuje HR cez WebSocket
-- `api`      — FastAPI, REST endpoints, session management, webhook prijímač
-- `sync`     — Python service, sťahuje rider profily z cloud rezerváku
-- `frontend` — statický HTML/JS dashboard (nginx), WebSocket klient
-- `db`       — PostgreSQL (session history, logs)
+**Stack (Docker Compose):**
+- `gateway/` — Python + bleak (BLE) + openant (ANT+), WebSocket broadcast, Admin REST API (port 8766)
+- `frontend/` — statický HTML/JS, nginx (port 80), WebSocket klient + admin panel
 
-**Cloud rezervačný systém (externý):**
-- Poskytuje endpoint `GET /api/v1/studio/riders/today`
-- Posiela webhooky pri zmene rezervácie na `POST /webhook/reservation-change`
-- Rider model obsahuje: `name`, `birth_year`, `weight_kg`, `gender`, `max_hr_override`, `bike_number`
+**Žiadny PostgreSQL, žiadna separate API služba** — všetko v gateway + SQLite.
 
 ---
 
-## Technické rozhodnutia a dôvody
-
-### ANT+ vs BLE
-Zvolený ANT+. Jeden dongle = 8 súčasných kanálov, takže pre 20 pásov = 3 dongles.
-BLE má limit ~7 spojení a horšiu spoľahlivosť pri väčšom počte zariadení.
-
-### Pevné device ID (nie scan mode)
-Každý ANT+ pás má pridelené `ant_device_id` v DB. Channel sa otvára s konkrétnym
-ID — nescannujeme okolie. Dôvod: spinning štúdio, každý bicykel má "svoje" miesto.
-
-### Lokálna SQLite cache
-HR monitor musí fungovať aj bez internetu. Sync service stiahne rider profily
-pred hodinou a uloží do SQLite. Ak vypadne cloud, cache zostáva.
-
-### MEP výpočet (Tanaka formula)
-Max HR sa nepýtame od ridera — vypočítame z veku:
-- Muži:  `208 - (0.7 × vek)`
-- Ženy:  `206 - (0.88 × vek)`
-Rider môže mať `max_hr_override` ak pozná svoje reálne MEP z testovania.
-
-### HR zóny (Myzone-kompatibilné)
-- Zóna 0 (šedá):   < 50% MEP
-- Zóna 1 (modrá):  50–59% MEP
-- Zóna 2 (zelená): 60–69% MEP
-- Zóna 3 (žltá):   70–79% MEP
-- Zóna 4 (červená): ≥ 80% MEP
-
-### Multi-dongle — každý v samostatnom vlákne
-`threading.Thread(target=node.start, daemon=True)` — jeden thread per dongle.
-Broadcast do asyncio event loopu cez `asyncio.run_coroutine_threadsafe()`.
-
----
-
-## Databázová schéma (lokálna)
+## Databázová schéma (aktuálna)
 
 ```sql
--- Fyzické bicykle v štúdiu
 CREATE TABLE bikes (
-    id          INTEGER PRIMARY KEY,
-    position    INTEGER UNIQUE NOT NULL,  -- miesto 1–20
-    label       TEXT NOT NULL,
-    dongle_port TEXT,                     -- napr. /dev/ttyUSB0
-    ant_channel INTEGER                   -- 0–7 na danom dongle
+    id INTEGER PRIMARY KEY,
+    position INTEGER UNIQUE NOT NULL,  -- miesto 1–20
+    label TEXT NOT NULL
 );
 
--- ANT+ pásy priradené k bicyklom
 CREATE TABLE straps (
-    id            INTEGER PRIMARY KEY,
-    ant_device_id INTEGER UNIQUE NOT NULL,
-    bike_id       INTEGER REFERENCES bikes(id),
-    label         TEXT
+    id INTEGER PRIMARY KEY,
+    ble_address TEXT UNIQUE NOT NULL,
+    ble_name TEXT,
+    label TEXT,                        -- číslo nálepky (1–20)
+    bike_id INTEGER REFERENCES bikes(id)
 );
 
--- Cache rider profilov z cloud rezerváku (prepísaná pred každou hodinou)
+CREATE TABLE riders_catalog (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    birth_year INTEGER NOT NULL,
+    weight_kg REAL,
+    gender TEXT NOT NULL DEFAULT 'M',
+    max_hr_override INTEGER,
+    birth_date TEXT                    -- YYYY-MM-DD, presnejší ako birth_year
+);
+
+CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+-- default: INSERT INTO settings VALUES('hr_formula', 'tanaka')
+
 CREATE TABLE riders_cache (
-    bike_position  INTEGER PRIMARY KEY,
-    name           TEXT NOT NULL,
-    max_hr         INTEGER NOT NULL,
-    weight_kg      REAL,
-    reservation_id INTEGER,
-    synced_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    bike_position INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    max_hr INTEGER NOT NULL,
+    weight_kg REAL,
+    catalog_id INTEGER
 );
 
--- Session história
 CREATE TABLE sessions (
-    id          INTEGER PRIMARY KEY,
-    started_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ended_at    DATETIME,
-    instructor  TEXT
+    id INTEGER PRIMARY KEY,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME
 );
 
--- Záznamy HR počas session (pre post-workout štatistiky)
 CREATE TABLE session_data (
-    session_id  INTEGER REFERENCES sessions(id),
+    session_id INTEGER REFERENCES sessions(id),
     bike_position INTEGER,
-    rider_name  TEXT,
-    timestamp   DATETIME DEFAULT CURRENT_TIMESTAMP,
-    hr          INTEGER,
-    zone        INTEGER
+    rider_name TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    hr INTEGER,
+    zone INTEGER
 );
 ```
+
+---
+
+## HR Formulae (hr_utils.py)
+
+```python
+# Tanaka (default)
+men:   208 - (0.7 × age)
+women: 206 - (0.88 × age)
+
+# Classic
+220 - age
+
+# Prepínač cez settings tabuľku: key='hr_formula', value='tanaka'|'classic'
+```
+
+**JS age calc (bug-free):**
+```javascript
+const [y, m, d] = birth_date.split('-').map(Number);
+// NIE new Date("YYYY-MM-DD") — parsuje ako UTC → zlý deň v SEČ
+```
+
+---
+
+## Zóny (Myzone-kompatibilné)
+
+| Zóna | % max HR | Farba | MEPs/min |
+|------|----------|-------|----------|
+| 0 | < 50% | tmavosivá | 0 |
+| 1 | 50–59% | sivá | 1 |
+| 2 | 60–69% | modrá | 2 |
+| 3 | 70–79% | zelená | 3 |
+| 4 | 80–89% | žltá | 4 |
+| 5 | ≥ 90% | červená | 4 |
 
 ---
 
@@ -121,151 +127,148 @@ CREATE TABLE session_data (
 
 ```
 hr-studio/
-├── CLAUDE.md               ← tento súbor
-├── docker-compose.yml
-├── .env.example
+├── CLAUDE.md
+├── docker-compose.yml              ← full stack (gateway+api+frontend+db) — server
+├── docker-compose.standalone.yml   ← gateway+frontend, SQLite — notebook
+├── docker-compose.frontend.yml     ← pre Coolify deploy
 │
-├── gateway/                ← ANT+ → WebSocket bridge
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py             ← vstupný bod, spúšťa node + asyncio
-│   ├── studio_manager.py   ← MultiDongleManager, načíta config z DB
-│   ├── strap_channel.py    ← StrapChannel, on_data, on_timeout
-│   └── hr_utils.py         ← calc_max_hr, calc_zone, calc_calories
+├── gateway/
+│   ├── main.py             ← asyncio, WebSocket server, Admin REST API
+│   ├── ble_manager.py      ← BleManager, asyncio.Lock (1 spojenie naraz)
+│   ├── ble_strap.py        ← BleStrap, Myzone MZ-1 protokol
+│   ├── admin_api.py        ← REST API: bikes, straps, riders, sessions, FIT export
+│   ├── session_manager.py  ← session start/stop, session_data zápis
+│   ├── fit_export.py       ← FIT súbor export (fit-tool==0.9.15)
+│   ├── hr_utils.py         ← calc_age(), calc_max_hr(), calc_zone(), calc_calories()
+│   ├── studio_manager.py   ← načíta bikes/straps z DB, riadi BLE
+│   └── requirements.txt
 │
-├── api/                    ← FastAPI backend
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py
-│   ├── routers/
-│   │   ├── session.py      ← start/stop session, live status
-│   │   ├── bikes.py        ← CRUD bicyklov a pásov
-│   │   └── webhook.py      ← prijíma zmeny z cloud rezerváku
-│   ├── models.py           ← SQLAlchemy modely
-│   └── sync.py             ← sync_riders(), sync_loop()
+├── frontend/
+│   ├── index.html          ← fullscreen dashboard (kiosk)
+│   ├── dashboard.js        ← WebSocket klient, grid rendering, zóny, animácie
+│   ├── admin.html          ← admin panel (bikes, straps, riders, sessions)
+│   └── nginx.conf
 │
-├── frontend/               ← Dashboard
-│   ├── Dockerfile          ← nginx
-│   ├── index.html          ← fullscreen dashboard
-│   ├── dashboard.js        ← WebSocket klient, grid rendering
-│   ├── zones.js            ← farby, zóna logika
-│   └── style.css
-│
-└── docs/
-    ├── hardware.md         ← odporúčaný hardware, dongle setup
-    ├── ant_device_ids.md   ← ako zistiť device ID pásu
-    └── reservation_api.md  ← dokumentácia cloud API kontraktu
+├── setup.sh                ← plne automatická inštalácia na čistý Debian
+├── setup-kiosk.sh          ← X11, Chromium kiosk, autologin
+└── installer/              ← USB bootovací ISO builder (Debian preseed)
 ```
 
 ---
 
-## ENV premenné
+## Admin API (nginx proxy /api/ → port 8766)
 
+```
+GET/POST  /api/bikes                    → CRUD bicyklov
+DELETE    /api/bikes/{id}
+PUT/DEL   /api/bikes/{id}/strap         → priradenie pásu
+
+GET/POST  /api/rider-catalog            → trvalý katalóg jazdcov
+PUT/DEL   /api/rider-catalog/{id}
+
+PUT/DEL   /api/riders/{position}        → riders_cache (pre aktuálnu hodinu)
+
+GET       /api/straps/status            → live HR/battery per strap
+GET       /api/scan                     → BLE scan 10s, auto-register MYZONE-*
+
+POST      /api/session/start|stop
+GET       /api/session                  → aktuálna session
+GET       /api/sessions                 → história
+GET       /api/sessions/{id}/riders/{pos}/export.fit  → FIT súbor download
+
+POST      /api/dashboard-reload         → broadcast refresh
+POST      /api/fix-hdmi                 → xrandr cez hdmi-helper.py (port 8767)
+POST      /api/restart-bt               → systemctl restart bluetooth (port 8768)
+GET       /api/settings                 → hr_formula
+PUT       /api/settings                 → uloží hr_formula
+GET       /api/network                  → sieťový stav (eth0/wlp2s0)
+```
+
+---
+
+## Deploy
+
+### Notebook (spinning štúdio)
 ```bash
-# .env (nikdy do gitu!)
+# Rebuild + deploy:
+docker compose -f docker-compose.standalone.yml build gateway frontend
+docker compose -f docker-compose.standalone.yml up -d
 
-# Cloud rezervačný systém
-CLOUD_REZERVAK_URL=https://rezervak.poetika.online/api/v1/studio
-STUDIO_API_KEY=generuj-cez-openssl-rand-hex-32
-WEBHOOK_SECRET=generuj-cez-openssl-rand-hex-32
-
-# Lokálna DB
-DATABASE_URL=postgresql://studio:pass@db:5432/studio
-LOCAL_CACHE_DB=/data/local_cache.db
-
-# ANT+ dongles (čiarkou oddelené porty)
-ANT_DONGLE_PORTS=/dev/ttyUSB0,/dev/ttyUSB1,/dev/ttyUSB2
-
-# Sync interval v sekundách
-SYNC_INTERVAL_SECONDS=300
-
-# WebSocket port
-WS_PORT=8765
+# Git pull + rebuild:
+echo 'hrstudio' | sudo -S git -C /opt/hr-studio pull
 ```
 
----
-
-## Kľúčové flows
-
-### 1. Štart hodiny (happy path)
-```
-instructor otvorí admin panel
-  → klikne "Načítať riderov"
-  → sync service zavolá GET /api/v1/studio/riders/today
-  → uloží do riders_cache
-  → gateway načíta cache, otvorí ANT+ kanály
-  → dashboard zobrazí karty s menami
-  → instructor klikne "Štart session"
-```
-
-### 2. Rider sa pripojí (pás sa nasadí)
-```
-pás začne vysielať broadcast
-  → StrapChannel.on_data() zachytí HR
-  → broadcast_ws({type: "hr_update", position, name, hr, pct, zone})
-  → frontend aktualizuje kartu (farba, % , BPM)
-```
-
-### 3. Výpadok internetu počas hodiny
-```
-sync service nemôže dosiahnuť cloud
-  → loguje warning, NIC INÉ sa nedeje
-  → riders_cache zostáva z posledného úspešného syncu
-  → HR monitoring beží normálne
-```
-
-### 4. Zmena rezervácie počas dňa
-```
-cloud rezervák odošle POST /webhook/reservation-change
-  → webhook.py overí X-Webhook-Secret header
-  → triggerne okamžitý sync_riders()
-  → broadcast_ws({type: "riders_updated"})
-  → dashboard refresh kariet (bez reload stránky)
-```
-
----
-
-## Čo ešte treba dorobiť
-
-- [ ] Admin panel (web UI pre priradenie pásov k bicyklom)
-- [ ] Post-workout súhrn (zóny čas, kalórie, priemerný HR per rider)
-- [ ] Integrácia s rezervačným systémom — pridať polia `birth_year`, `weight_kg`,
-      `gender`, `max_hr_override`, `bike_number` do rider modelu tam
-- [ ] Watchdog pre vypadnuté pásy (timeout detekcia)
-- [ ] Kalórie výpočet (Keytel formula, potrebuje váhu + HR)
-- [ ] MEP test flow (voliteľný — rider môže urobiť 20min test a override uložiť)
-- [ ] SSL / lokálna sieť konfig (odporúčam Tailscale pre remote prístup)
-
----
-
-## Hardware notes
-
-- **Odporúčaný**: mini PC s Intel N100, 8–16 GB RAM (napr. Beelink EQ12, ~150 €)
-- **Alternatíva**: Raspberry Pi 5 (8 GB) — funguje, ale ARM (niektoré Docker image
-  treba buildovať lokálne)
-- **ANT+ dongles**: Dynastream ANTUSB-m alebo Garmin USB ANT Stick
-  — každý zvládne max 8 simultánnych kanálov
-- **Pre 20 pásov**: 3 dongles
-- **OS**: Ubuntu 24.04 LTS alebo Raspberry Pi OS (Debian Bookworm)
-- Docker group_add: `dialout` pre prístup k USB serial zariadeniam
-
----
-
-## Užitočné príkazy
-
+### Server (Coolify)
 ```bash
-# Spustenie celého stacku
-docker compose up -d
+# Trigger redeploy cez API:
+COOLIFY_TOKEN="..."
+curl -X POST "http://localhost:8000/api/v1/deploy?uuid=uduo7vv26va660q740j4wwi7" \
+  -H "Authorization: Bearer $COOLIFY_TOKEN"
 
-# Logy gateway (ANT+ príjem)
-docker compose logs -f gateway
-
-# Manuálny sync riderov
-docker compose exec api python -c "import asyncio; from sync import sync_riders; asyncio.run(sync_riders())"
-
-# Zistenie ANT+ device ID pásu (scan mode — len pre setup)
-docker compose exec gateway python tools/scan_devices.py
-
-# Backup lokálnej cache
-docker compose exec api sqlite3 /data/local_cache.db .dump > backup_$(date +%Y%m%d).sql
+# Po rebuilde importuj DB zálohu:
+docker run --rm \
+  -v uduo7vv26va660q740j4wwi7_cache-data:/data \
+  -v /path/to/backup:/backup \
+  alpine cp /backup/hr_data.db /data/local_cache.db
+docker restart gateway-uduo7vv26va660q740j4wwi7-*
 ```
+
+### Záloha DB z notebooku na server
+```bash
+sshpass -p 'hrstudio' ssh adminhrstudio@192.168.1.145 \
+  "docker run --rm -v hr-studio_hr_data:/data alpine sh -c 'cat /data/local_cache.db'" \
+  > backup/hr_data.db
+# Poznámka: súbor v volume sa volá local_cache.db (nie hr_data.db)
+```
+
+---
+
+## Kľúčové poznatky BLE
+
+- MZ-1 advertisuje **len keď má skin contact** (mokré elektródy)
+- ~20s inicializácia po nasadení → HR=0 ignorované
+- BlueZ zvláda 1 BLE spojenie naraz → `asyncio.Lock` v BleManager
+- Po redeploy treba dať pás dole (BlueZ zombie spojenie)
+- `network_mode: host` na gateway (potrebné pre BLE cez D-Bus)
+- `extra_hosts: gateway:host-gateway` vo frontend (keďže gateway je v host network)
+
+---
+
+## Hardware (notebook — spinning štúdio)
+
+- **Notebook:** Dell Latitude 7390, i7-8650U
+- **BT dongle:** Asus BT540 (USB, hci0, MAC A0:AD:9F:73:9C:F0)
+- **ANT+ dongle:** Dynastream ANTUSB2 Stick (0x0fcf:0x1008) — zasunutý do notebooku
+- **Freeze fix:** `i915.enable_psr=0 nvme_core.default_ps_max_latency_us=0` v GRUB
+- **WiFi:** wpasupplicant (NIE NetworkManager!) — skripty: wifi-home.sh, wifi-studio.sh, wifi-iphone.sh
+
+---
+
+## ANT+ integrácia
+
+**Dongle:** Dynastream ANTUSB2 Stick (VID: 0x0fcf, PID: 0x1008), prístupný cez `privileged: true` v Docker.
+**udev rule:** `/etc/udev/rules.d/99-ant-dongle.rules` — pre prístup mimo Docker.
+
+**Pridanie ANT+ pásu:**
+```bash
+# Zisti ANT+ device ID pásu (číslo je vytlačené na páse, napr. pre Myzone typ "DEVICE ID")
+# Potom cez admin API:
+curl -X PUT http://192.168.1.145:8766/api/bikes/1/strap \
+  -H 'Content-Type: application/json' \
+  -d '{"ant_device_id": 12345, "label": "Pás č.1"}'
+```
+
+**Stav ANT+ kanálov:** `GET /api/straps/status` — každý záznam má `transport: "ant"` alebo `"ble"`.
+
+**Súbory:**
+- `gateway/studio_manager.py` — ANT+ manager (vlákno, openant)
+- `gateway/strap_channel.py` — jeden ANT+ kanál = jeden pás
+
+---
+
+## Čo ešte treba
+
+- [ ] FIT export end-to-end test (GoldenCheetah ✓, Strava/Garmin Connect?)
+- [ ] FitReserve sync — riders pred hodinou cez API
+- [ ] Test s 2+ MZ-1 pásmi súčasne
+- [ ] Test ANT+ s reálnym pásom (nakonfigurovať ant_device_id cez admin API)
