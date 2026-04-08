@@ -103,23 +103,32 @@ function renderTimerSVG() {
   const OR = 48, OW = 6, GAP = 1.5;
   let outerHTML = `<circle r="${OR}" fill="none" stroke="#1c1c1c" stroke-width="${OW}"/>`;
   let angleDeg = 0;
-  let cumForSeg = 0;
   for (let i = 0; i < intervals.length; i++) {
     const iv = intervals[i];
     const sweepDeg = (iv.duration / total_sec) * 360;
-    const s = angleDeg + GAP;
-    const e = angleDeg + sweepDeg - GAP;
-    if (e > s) {
-      let opacity;
-      if (done)           opacity = 1.0;
-      else if (i < currentIdx) opacity = 0.25;
-      else if (i === currentIdx) opacity = 1.0;
-      else opacity = 0.45;
-      const d = timerArcPath(OR, s, e);
-      outerHTML += `<path d="${d}" fill="none" stroke="${col(iv.type)}" stroke-width="${OW}" opacity="${opacity}" stroke-linecap="butt"/>`;
+    const segStart = angleDeg + GAP;
+    const segEnd   = angleDeg + sweepDeg - GAP;
+    if (segEnd > segStart) {
+      const c = col(iv.type);
+      if (done || i < currentIdx) {
+        // Prebehnutý interval — celý stmavený
+        outerHTML += `<path d="${timerArcPath(OR, segStart, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="0.25" stroke-linecap="butt"/>`;
+      } else if (i === currentIdx) {
+        // Aktuálny interval — split na prebehnutú a zostatok
+        const splitDeg = angleDeg + (timeIntoInterval / iv.duration) * sweepDeg;
+        const split = Math.min(Math.max(splitDeg, segStart), segEnd);
+        if (split > segStart) {
+          outerHTML += `<path d="${timerArcPath(OR, segStart, split)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="0.25" stroke-linecap="butt"/>`;
+        }
+        if (segEnd > split) {
+          outerHTML += `<path d="${timerArcPath(OR, split, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="1.0" stroke-linecap="butt"/>`;
+        }
+      } else {
+        // Budúci interval — normálna farba, mierne stmavená
+        outerHTML += `<path d="${timerArcPath(OR, segStart, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="0.45" stroke-linecap="butt"/>`;
+      }
     }
-    angleDeg  += sweepDeg;
-    cumForSeg += iv.duration;
+    angleDeg += sweepDeg;
   }
 
   // ── Inner countdown ring ───────────────────────────────────────────────────
