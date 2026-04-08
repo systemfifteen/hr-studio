@@ -28,7 +28,7 @@ let riders = {};   // position → {name, hr, pct, zone, calories, connected, hi
 let ws = null;
 
 const hideTimers = {};       // position → setTimeout handle
-const HIDE_DELAY_MS = 60000; // 60s po signal_lost → skry kartu
+const HIDE_DELAY_MS = 45000; // 45s po signal_lost → skry kartu
 
 // ── Persistencia stavu (localStorage) ────────────────────────────────────────
 const STORAGE_KEY = 'hr-studio-riders-v1';

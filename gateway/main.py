@@ -20,7 +20,7 @@ logger = logging.getLogger("gateway")
 CACHE_DB         = os.getenv("LOCAL_CACHE_DB", "/data/local_cache.db")
 WS_PORT          = int(os.getenv("WS_PORT", 8765))
 RELOAD_PORT      = int(os.getenv("GATEWAY_RELOAD_PORT", 8766))
-WATCHDOG_TIMEOUT = 5    # sekúnd bez signálu = pás odpojený
+WATCHDOG_TIMEOUT = 3    # sekúnd bez signálu = pás odpojený
 
 connected_clients: set = set()
 manager: BleManager | None = None
