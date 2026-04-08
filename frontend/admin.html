@@ -623,13 +623,27 @@ let _strapBikeId = null;
 
 function editStrap(bikeId, current) {
   _strapBikeId = bikeId;
+
+  // Zozbieraj ble_address a ant_device_id všetkých pásov priradených k INÝM bicyklom
+  const usedBle = new Set();
+  const usedAnt = new Set();
+  bikes.forEach(b => {
+    if (b.id === bikeId) return;  // tento bicykel preskočíme — jeho pás môže zostať
+    if (b.strap?.ble_address)   usedBle.add(b.strap.ble_address.toUpperCase());
+    if (b.strap?.ant_device_id) usedAnt.add(b.strap.ant_device_id);
+  });
+
   const sel = document.getElementById('sa-catalog-select');
   sel.innerHTML = '<option value="">— vyber pás —</option>' +
     catalog.map(c => {
-      const info = c.ble_address ? ` · ${c.ble_address}` : ' · bez MAC';
-      return `<option value="${c.id}">${c.label} — ${c.ble_name || '?'}${info}</option>`;
+      const info   = c.ble_address ? ` · ${c.ble_address}` : (c.ant_device_id ? ` · ANT+:${c.ant_device_id}` : '');
+      const inUse  = (c.ble_address && usedBle.has(c.ble_address.toUpperCase()))
+                  || (c.ant_device_id && usedAnt.has(c.ant_device_id));
+      return `<option value="${c.id}" ${inUse ? 'disabled style="color:#444"' : ''}>`
+           + `${c.label} — ${c.ble_name || '?'}${info}${inUse ? ' (obsadený)' : ''}</option>`;
     }).join('');
-  // pre-select by current address
+
+  // Predvyber aktuálny pás
   if (current) {
     const matched = catalog.find(c => c.ble_address && c.ble_address.toUpperCase() === current.toUpperCase());
     if (matched) sel.value = matched.id;
