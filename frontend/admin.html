@@ -86,8 +86,8 @@ input[type=number]{width:90px}
 #toast.error{border-color:#e06060;color:#e06060}
 
 .empty{color:#555;font-style:italic;padding:16px 14px;font-size:15px}
-#scan-spinner{display:none;align-items:center;gap:10px;color:#888;font-size:14px}
-#scan-spinner.active{display:flex}
+#scan-spinner,#scan-ant-all-spinner{display:none;align-items:center;gap:10px;color:#888;font-size:14px}
+#scan-spinner.active,#scan-ant-all-spinner.active{display:flex}
 .spinner{width:20px;height:20px;border:2px solid #333;border-top-color:#e03060;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -758,6 +758,8 @@ function cancelAssign() {
 }
 
 // ── ANT+ all-device scan ───────────────────────────────────────────────────
+const TYPE_COLOR = { HR:'#e05070','FE-C':'#7aadff',PWR:'#ffcc55',CAD:'#4caf78','SPD+CAD':'#4caf78',SPD:'#aaa',SDM:'#aaa' };
+
 async function doScanAntAll() {
   const btn     = document.getElementById('btn-scan-ant-all');
   const spinner = document.getElementById('scan-ant-all-spinner');
@@ -770,43 +772,92 @@ async function doScanAntAll() {
     const r = await fetch(`${API}/scan-ant-all`);
     const d = await r.json();
     if (!r.ok || !d.devices?.length) {
-      results.innerHTML = '<p style="color:#666;font-size:13px">Žiadne ANT+ zariadenia nenájdené.</p>';
+      results.innerHTML = '<p style="color:#666;font-size:13px;margin-top:10px">Žiadne ANT+ zariadenia nenájdené. Skontroluj dongle a či máš pásy na tele.</p>';
       return;
     }
-    const typeColor = { HR: '#e05070', 'FE-C': '#7aadff', PWR: '#ffcc55', CAD: '#4caf78', 'SPD+CAD': '#4caf78', SPD: '#aaa', SDM: '#aaa' };
-    results.innerHTML = `
-      <table class="tbl" style="margin-top:10px">
-        <thead><tr><th>Device ID</th><th>Typ</th><th>Popis</th><th></th></tr></thead>
-        <tbody>
-          ${d.devices.map(dev => {
-            const color = typeColor[dev.device_type_short] || '#aaa';
-            const isHr  = dev.device_type === 0x78;
-            return `<tr>
-              <td style="font-family:monospace;font-size:14px"><strong>${dev.device_id}</strong></td>
-              <td><span style="color:${color};font-weight:600;font-size:12px">${dev.device_type_short}</span><span style="color:#444;font-size:11px;margin-left:6px">0x${dev.device_type.toString(16).padStart(2,'0').toUpperCase()}</span></td>
-              <td style="color:#aaa;font-size:13px">${dev.device_type_desc}</td>
-              <td style="text-align:right">${isHr
-                ? `<button class="btn btn-secondary btn-small" onclick="antIdToCatalog(${dev.device_id})">→ Katalóg</button>`
-                : ''}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-      <p style="color:#555;font-size:12px;margin-top:8px">Nájdených: ${d.count} zariadení</p>`;
+    renderAntScanResults(d.devices);
   } catch(e) {
-    results.innerHTML = '<p style="color:#e05070;font-size:13px">Chyba skenu — skontroluj ANT+ dongle.</p>';
+    results.innerHTML = '<p style="color:#e05070;font-size:13px;margin-top:10px">Chyba skenu — skontroluj ANT+ dongle.</p>';
   } finally {
     btn.disabled = false;
     spinner.classList.remove('active');
   }
 }
 
-function antIdToCatalog(deviceId) {
-  // Scroll na katalóg a prefill ANT+ ID pole
-  document.getElementById('cat-ant-id').value = deviceId;
-  document.getElementById('cat-ant-id').focus();
-  document.getElementById('cat-ant-id').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  toast(`ANT+ ID ${deviceId} skopírovaný do formulára katalógu`, 'success');
+function renderAntScanResults(devices) {
+  const results = document.getElementById('scan-ant-all-results');
+  const catOptions = catalog.map(c =>
+    `<option value="${c.id}" data-label="${c.label}">${c.label}${c.ble_name ? ' — '+c.ble_name : ''}${c.ant_device_id ? ' [ANT+:'+c.ant_device_id+']' : ''}</option>`
+  ).join('');
+
+  results.innerHTML = `
+    <table class="tbl" style="margin-top:12px">
+      <thead><tr><th>Device ID</th><th>Typ</th><th>Popis</th><th>Priradiť k pásu v katalógu</th></tr></thead>
+      <tbody>
+        ${devices.map((dev, i) => {
+          const color = TYPE_COLOR[dev.device_type_short] || '#aaa';
+          const typeHex = '0x' + dev.device_type.toString(16).padStart(2,'0').toUpperCase();
+          // Predvyber katalóg ak ANT+ ID už sedí
+          const presel = catalog.find(c => c.ant_device_id === dev.device_id);
+          return `<tr id="ant-row-${i}">
+            <td style="font-family:monospace;font-size:14px"><strong>${dev.device_id}</strong></td>
+            <td><span style="color:${color};font-weight:600;font-size:12px">${dev.device_type_short}</span><span style="color:#444;font-size:11px;margin-left:5px">${typeHex}</span></td>
+            <td style="color:#aaa;font-size:13px">${dev.device_type_desc}</td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <select id="ant-cat-sel-${i}" style="background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:12px;min-width:160px">
+                  <option value="">— nevyberať —</option>
+                  ${catOptions}
+                </select>
+                <button class="btn btn-primary btn-small" onclick="assignAntToCatalog(${i}, ${dev.device_id})">Priradiť</button>
+                ${presel ? `<span style="color:#4caf78;font-size:11px">✓ ${presel.label}</span>` : ''}
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    <p style="color:#555;font-size:12px;margin-top:8px">Nájdených: ${devices.length} zariadení</p>`;
+
+  // Predvyber v select-och
+  devices.forEach((dev, i) => {
+    const presel = catalog.find(c => c.ant_device_id === dev.device_id);
+    if (presel) document.getElementById(`ant-cat-sel-${i}`).value = presel.id;
+  });
+}
+
+async function assignAntToCatalog(rowIdx, deviceId) {
+  const sel = document.getElementById(`ant-cat-sel-${rowIdx}`);
+  const catId = parseInt(sel.value);
+  if (!catId) { toast('Vyber pás zo zoznamu', 'error'); return; }
+
+  const entry = catalog.find(c => c.id === catId);
+  if (!entry) { toast('Pás nenájdený v katalógu', 'error'); return; }
+
+  const r = await fetch(`${API}/strap-catalog/${catId}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      label:         entry.label,
+      ble_name:      entry.ble_name  || null,
+      ble_address:   entry.ble_address || null,
+      ant_device_id: deviceId,
+    }),
+  });
+  if (r.ok) {
+    toast(`ANT+ ID ${deviceId} priradený k pásu "${entry.label}"`, 'success');
+    await loadStrapCatalog();
+    // Obnov zobrazenie (predvybrané)
+    const row = document.getElementById(`ant-row-${rowIdx}`);
+    if (row) {
+      const badge = row.querySelector('span[style*="4caf78"]');
+      if (badge) badge.textContent = `✓ ${entry.label}`;
+      else row.querySelector('div').insertAdjacentHTML('beforeend',
+        `<span style="color:#4caf78;font-size:11px">✓ ${entry.label}</span>`);
+    }
+  } else {
+    toast('Chyba priradenia', 'error');
+  }
 }
 
 async function doAssign() {

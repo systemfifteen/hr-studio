@@ -601,21 +601,23 @@ class AdminApi:
         ant_id    = data.get("ant_device_id")
         label     = (data.get("label") or "").strip()
 
-        # If catalog_id provided, look up address (and label) from catalog
+        # If catalog_id provided, look up address and ant_device_id from catalog
         catalog_id = data.get("catalog_id")
         if catalog_id is not None:
             db = self._db()
             row = db.execute(
-                "SELECT ble_address, label FROM strap_catalog WHERE id=?",
+                "SELECT ble_address, label, ant_device_id FROM strap_catalog WHERE id=?",
                 (int(catalog_id),),
             ).fetchone()
             db.close()
             if not row:
                 return 404, {"error": "catalog entry not found"}
-            if not row[0]:
-                return 400, {"error": "catalog entry has no ble_address"}
-            addr  = row[0].upper()
-            label = label or row[1]
+            if not row[0] and row[2] is None:
+                return 400, {"error": "catalog entry has no ble_address or ant_device_id"}
+            addr   = row[0].upper() if row[0] else None
+            label  = label or row[1]
+            if ant_id is None and row[2] is not None:
+                ant_id = int(row[2])
 
         if not addr and ant_id is None:
             return 400, {"error": "ble_address or ant_device_id required"}
