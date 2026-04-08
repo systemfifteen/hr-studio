@@ -131,8 +131,8 @@ function renderTimerSVG() {
   const remaining = done ? 0 : Math.max(0, cur.duration - timeIntoInterval);
   const remainFrac = done ? 0 : remaining / cur.duration;
 
-  const WORK_COL = "#e07020";
-  const REST_COL = "#2472c8";
+  const WORK_COL = "#e03060";
+  const REST_COL = "#1a8c3e";
   const col = t => t === "work" ? WORK_COL : REST_COL;
 
   // ── Outer ring (program segments) ──────────────────────────────────────────
@@ -238,7 +238,7 @@ function handleMessage(msg) {
           calories:    saved.calories ?? 0,
           meps:        saved.meps     ?? 0,
           zoneHistory: saved.zoneHistory || [],
-          hidden:      saved.hidden   ?? false,
+          hidden:      r.hidden ?? saved.hidden ?? false,
         };
         // Ak je odpojený a ešte nie je skrytý ani nemá bežiaci timer → spusti
         if (!r.connected && !riders[r.position].hidden && !hideTimers[r.position]) {
@@ -305,6 +305,14 @@ function handleMessage(msg) {
     case "riders_updated":
       showToast("Riders aktualizovaní");
       fetchAndMergeRiders();
+      break;
+
+    case "rider_visibility":
+      if (riders[msg.position]) {
+        riders[msg.position].hidden = msg.hidden;
+        if (hideTimers[msg.position]) { clearTimeout(hideTimers[msg.position]); delete hideTimers[msg.position]; }
+        renderGrid();
+      }
       break;
 
     case "session_stopped":

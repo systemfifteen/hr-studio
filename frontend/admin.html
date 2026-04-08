@@ -543,6 +543,7 @@ function renderBikes() {
       <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
         <button class="btn btn-secondary btn-small" onclick="editRider(${b.position}, ${JSON.stringify(b.rider||{}).replace(/"/g,'&quot;')})">👤 Rider</button>
         ${b.rider ? `<button class="btn btn-danger btn-small" onclick="quickRemoveRider(${b.position})">✕ Rider</button>` : ''}
+        ${b.rider ? `<button class="btn btn-small" style="background:${b.hidden ? '#555' : '#1a5fa8'}" onclick="toggleRiderVisibility(${b.position}, ${b.hidden})" title="${b.hidden ? 'Zobraziť na dashboarde' : 'Skryť z dashboardu'}">${b.hidden ? '🙈 Skrytý' : '👁 Vidí'}</button>` : ''}
         ${b.strap
           ? `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '${b.strap.ble_address}')">Zmeniť pás</button>
              <button class="btn btn-danger btn-small" onclick="removeStrap(${b.id})">✕</button>`
@@ -984,6 +985,16 @@ async function deleteRider() {
 async function quickRemoveRider(position) {
   await fetch(`${API}/riders/${position}`, { method: 'DELETE' });
   toast('Rider odstránený');
+  loadBikes();
+}
+
+async function toggleRiderVisibility(position, currentlyHidden) {
+  await fetch(`${API}/riders/${position}/visibility`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ hidden: !currentlyHidden }),
+  });
+  toast(currentlyHidden ? 'Rider zobrazený na dashboarde' : 'Rider skrytý z dashboardu');
   loadBikes();
 }
 

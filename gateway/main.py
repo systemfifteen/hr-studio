@@ -49,6 +49,9 @@ async def ws_handler(ws, path):
         all_riders.extend(manager.get_status())
     if ant_manager:
         all_riders.extend(ant_manager.get_status())
+    hidden = admin_api.get_hidden_positions() if admin_api else set()
+    for r in all_riders:
+        r["hidden"] = r.get("position") in hidden
     await ws.send(json.dumps({
         "type":   "initial_state",
         "riders": all_riders,

@@ -21,7 +21,9 @@ class AdminApi:
         self.broadcast_fn = broadcast_fn
         self.session_mgr  = session_mgr
         self.timer        = timer
+        self._hidden_positions: set = set()
         self._ensure_catalog_table()
+        self._load_hidden_positions()
 
     def _ensure_catalog_table(self):
         db = self._db()
@@ -71,6 +73,26 @@ class AdminApi:
 
     def _db(self):
         return sqlite3.connect(self.cache_db)
+
+    def _load_hidden_positions(self):
+        try:
+            db = self._db()
+            row = db.execute("SELECT value FROM settings WHERE key='hidden_positions'").fetchone()
+            db.close()
+            if row:
+                self._hidden_positions = set(json.loads(row[0]))
+        except Exception:
+            pass
+
+    def _save_hidden_positions(self):
+        db = self._db()
+        db.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('hidden_positions', ?)",
+                   (json.dumps(list(self._hidden_positions)),))
+        db.commit()
+        db.close()
+
+    def get_hidden_positions(self) -> set:
+        return self._hidden_positions
 
     async def handle(self, method: str, path: str, body: bytes) -> tuple[int, object]:
         try:
@@ -133,14 +155,17 @@ class AdminApi:
             return 200, self._get_riders()
 
         if path.startswith("/riders/"):
+            parts = path.split("/")
             try:
-                position = int(path.split("/")[2])
+                position = int(parts[2])
             except (IndexError, ValueError):
                 return 400, {"error": "invalid position"}
-            if method == "PUT":
+            if method == "PUT" and len(parts) == 3:
                 return await self._upsert_rider(position, data)
-            if method == "DELETE":
+            if method == "DELETE" and len(parts) == 3:
                 return await self._delete_rider(position)
+            if method == "POST" and len(parts) == 4 and parts[3] == "visibility":
+                return await self._set_rider_visibility(position, data)
 
         # Session
         if method == "GET" and path == "/session":
@@ -564,6 +589,20 @@ class AdminApi:
         await self._reload()
         return 200, {"ok": True}
 
+    async def _set_rider_visibility(self, position: int, data: dict):
+        hidden = bool(data.get("hidden", False))
+        if hidden:
+            self._hidden_positions.add(position)
+        else:
+            self._hidden_positions.discard(position)
+        self._save_hidden_positions()
+        await self.broadcast_fn({
+            "type":     "rider_visibility",
+            "position": position,
+            "hidden":   hidden,
+        })
+        return 200, {"ok": True, "position": position, "hidden": hidden}
+
     def _get_bikes(self):
         db = self._db()
         bikes = db.execute(
@@ -585,6 +624,7 @@ class AdminApi:
                 "id":       bike_id,
                 "position": position,
                 "label":    label,
+                "hidden":   position in self._hidden_positions,
                 "strap":    {
                                 "id":            strap[0],
                                 "ble_address":   strap[1],
