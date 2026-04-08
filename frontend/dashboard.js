@@ -143,21 +143,22 @@ function renderTimerSVG() {
     const segEnd   = angleDeg + sweepDeg - GAP;
     if (segEnd > segStart) {
       const c = col(iv.type);
+      const CONSUMED = "#333";
       if (done || i < currentIdx) {
-        // Prebehnutý interval — celý stmavený
-        outerHTML += `<path d="${timerArcPath(OR, segStart, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="0.25" stroke-linecap="butt"/>`;
+        // Prebehnutý interval — celý sivý
+        outerHTML += `<path d="${timerArcPath(OR, segStart, segEnd)}" fill="none" stroke="${CONSUMED}" stroke-width="${OW}" stroke-linecap="butt"/>`;
       } else if (i === currentIdx) {
-        // Aktuálny interval — split na prebehnutú a zostatok
+        // Aktuálny interval — sivá prebehnutá časť + farebný zostatok
         const splitDeg = angleDeg + (timeIntoInterval / iv.duration) * sweepDeg;
         const split = Math.min(Math.max(splitDeg, segStart), segEnd);
         if (split > segStart) {
-          outerHTML += `<path d="${timerArcPath(OR, segStart, split)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="0.25" stroke-linecap="butt"/>`;
+          outerHTML += `<path d="${timerArcPath(OR, segStart, split)}" fill="none" stroke="${CONSUMED}" stroke-width="${OW}" stroke-linecap="butt"/>`;
         }
         if (segEnd > split) {
-          outerHTML += `<path d="${timerArcPath(OR, split, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="1.0" stroke-linecap="butt"/>`;
+          outerHTML += `<path d="${timerArcPath(OR, split, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" stroke-linecap="butt"/>`;
         }
       } else {
-        // Budúci interval — normálna farba, mierne stmavená
+        // Budúci interval — farebný, mierne stmavený
         outerHTML += `<path d="${timerArcPath(OR, segStart, segEnd)}" fill="none" stroke="${c}" stroke-width="${OW}" opacity="0.45" stroke-linecap="butt"/>`;
       }
     }
