@@ -24,8 +24,11 @@ const ZONE_HISTORY_COLORS = {
   5: "#e02030",
 };
 
-let riders = {};   // position → {name, hr, pct, zone, calories, connected}
+let riders = {};   // position → {name, hr, pct, zone, calories, connected, hidden}
 let ws = null;
+
+const hideTimers = {};       // position → setTimeout handle
+const HIDE_DELAY_MS = 60000; // 60s po signal_lost → skry kartu
 
 // ── Persistencia stavu (localStorage) ────────────────────────────────────────
 const STORAGE_KEY = 'hr-studio-riders-v1';
@@ -246,8 +249,14 @@ function handleMessage(msg) {
       applyTimerState(msg);
       break;
 
-    case "hr_update":
+    case "hr_update": {
       if (!riders[msg.position]) riders[msg.position] = {};
+      // Zruš prípadný hide timer
+      if (hideTimers[msg.position]) {
+        clearTimeout(hideTimers[msg.position]);
+        delete hideTimers[msg.position];
+      }
+      const wasHidden = riders[msg.position].hidden;
       Object.assign(riders[msg.position], {
         name:      msg.name,
         hr:        msg.hr,
@@ -258,16 +267,27 @@ function handleMessage(msg) {
         watts:     msg.watts,
         battery:   msg.battery,
         connected: true,
+        hidden:    false,
       });
       pushZoneHistory(msg.position, msg.zone);
-      updateCard(msg.position);
+      if (wasHidden) renderGrid(); else updateCard(msg.position);
       break;
+    }
 
     case "disconnected":
     case "signal_lost":
       if (riders[msg.position]) {
         riders[msg.position].connected = false;
         updateCard(msg.position);
+        // Po 60s skry kartu (session dáta zostanú zachované)
+        if (hideTimers[msg.position]) clearTimeout(hideTimers[msg.position]);
+        hideTimers[msg.position] = setTimeout(() => {
+          if (riders[msg.position]) {
+            riders[msg.position].hidden = true;
+            renderGrid();
+          }
+          delete hideTimers[msg.position];
+        }, HIDE_DELAY_MS);
       }
       break;
 
@@ -277,6 +297,11 @@ function handleMessage(msg) {
       break;
 
     case "session_stopped":
+      // Zruš všetky hide timery
+      for (const pos of Object.keys(hideTimers)) {
+        clearTimeout(hideTimers[pos]);
+        delete hideTimers[pos];
+      }
       localStorage.removeItem(STORAGE_KEY);
       if (msg.summary?.length) showSummary(msg.summary);
       break;
@@ -285,7 +310,7 @@ function handleMessage(msg) {
 
 function renderGrid() {
   const hasTimer = timerActive(timerState);
-  const positions = Object.keys(riders).map(Number).sort((a, b) => {
+  const positions = Object.keys(riders).map(Number).filter(pos => !riders[pos].hidden).sort((a, b) => {
     const nameA = (riders[a].name || '').toLowerCase();
     const nameB = (riders[b].name || '').toLowerCase();
     return nameA.localeCompare(nameB);
@@ -493,7 +518,10 @@ async function fetchAndMergeRiders() {
 
     // Odstráň pozície ktoré už nie sú v konfigurácii
     for (const pos of Object.keys(riders).map(Number)) {
-      if (!newPositions.has(pos)) delete riders[pos];
+      if (!newPositions.has(pos)) {
+        if (hideTimers[pos]) { clearTimeout(hideTimers[pos]); delete hideTimers[pos]; }
+        delete riders[pos];
+      }
     }
 
     // Doplň nových, aktualizuj metadata existujúcich (zachovaj live dáta)
