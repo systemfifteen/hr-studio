@@ -1,6 +1,6 @@
 # HR Studio Monitor
 
-Live HR monitoring systém pre spinning štúdio. Číta BLE hrudné pásy (Myzone MZ-1) a zobrazuje heart rate dáta na TV dashboarde v reálnom čase.
+Live HR monitoring systém pre spinning štúdio. Číta BLE aj ANT+ hrudné pásy (Myzone MZ-1) a zobrazuje heart rate dáta na TV dashboarde v reálnom čase.
 
 **Live demo:** https://hrstudio.system15.win
 **GitHub:** https://github.com/systemfifteen/hr-studio
@@ -24,10 +24,12 @@ Live HR monitoring systém pre spinning štúdio. Číta BLE hrudné pásy (Myzo
 ```
 [Myzone MZ-1 pásy]
        │ BLE (GATT, Heart Rate Service 0x180D)
+       │ ANT+ (HR profile 0x78, Dynastream ANTUSB2)
        ▼
 ┌─────────────────┐
-│  gateway/        │  Python + bleak
-│  BLE Manager     │  → pripája sa k pásom
+│  gateway/        │  Python + bleak + openant
+│  BLE Manager     │  → pripája sa k pásom (BLE)
+│  ANT+ Manager    │  → ANT+ kanály (HR, FE-C...)
 │  WebSocket :8765 │  → broadcastuje HR dáta
 │  Admin API :8766 │  → REST pre admin panel
 └────────┬────────┘
@@ -57,9 +59,10 @@ Live HR monitoring systém pre spinning štúdio. Číta BLE hrudné pásy (Myzo
 
 | Komponent | Detail |
 |-----------|--------|
-| **Notebook/PC** | Intel laptop s NVMe, WiFi — sieť `No_internet`, IP `192.168.1.145` |
+| **Notebook/PC** | Dell Latitude 7390, i7-8650U — WiFi `No_internet`, IP `192.168.1.145` |
 | **BT dongle** | Asus BT540 (USB), `hci0`, MAC `A0:AD:9F:73:9C:F0` |
-| **HR pásy** | Myzone MZ-1 — BLE GATT, Heart Rate Service (UUID `0x180D`) |
+| **ANT+ dongle** | Dynastream ANTUSB2 Stick (VID `0x0fcf`, PID `0x1008`) |
+| **HR pásy** | Myzone MZ-1 — BLE GATT `0x180D` + ANT+ HR profile `0x78` |
 | **TV** | HDMI na notebook (`HDMI-1`), 1920×1080 @ 60Hz |
 
 ### BLE špecifiká Myzone MZ-1
@@ -159,13 +162,17 @@ URL: `http://<IP>/admin.html`
 
 | Sekcia | Popis |
 |--------|-------|
-| **Bikes** | Správa 18 fyzických bicyklov (position = číslo z FitReserve, label = štítok na biku) |
-| **Straps** | Priradenie BLE pásov k bicyklom, BLE scanner (10s scan) |
-| **Rider catalog** | Trvalý zoznam jazdcov — meno, rok narodenia, váha, pohlavie, max HR override |
+| **Bikes & pásy** | Správa 18 bicyklov, priradenie pásov (BLE + ANT+ ID), stĺpec Live (BLE/ANT badge) |
+| **Katalóg pásov** | Fyzické pásy — label, BLE name, MAC, ANT+ ID; obsadené pásy disabled v dropdown |
+| **BLE skener** | 10s scan, auto-register MYZONE pásy, priradenie k bicyklu z výsledkov |
+| **ANT+ skener** | Wildcard scan všetkých ANT+ zariadení (HR, FE-C, kadencia...); priradenie ID do katalógu |
+| **Rider catalog** | Trvalý zoznam jazdcov — meno, dátum nar., váha, pohlavie, max HR override |
 | **Rider assignment** | Priradenie jazdca k bicyklu (z katalógu alebo manuálne) |
-| **Session** | Štart / stop hodiny, záznamy |
-| **Fix HDMI** | Aktivuje HDMI výstup na TV (`xrandr --output HDMI-1 --mode 1920x1080 --same-as eDP-1`) |
-| **Reload TV** | Pošle `riders_updated` broadcast — dashboard sa refreshne bez reloadu stránky |
+| **Session** | Štart / stop hodiny, história, CSV export |
+| **Interval timer** | Konfigurácia intervalového programu (rounds, work/rest min), Start/Pause/Resume/Stop, stav sa zobrazuje na dashboarde ako 2×2 SVG widget |
+| **Restart BT / ANT+** | Reštartuje bluetooth / ANT+ dongle (reload kanálov) |
+| **Fix HDMI** | Aktivuje HDMI výstup na TV (`xrandr`) |
+| **Reload TV** | Broadcast refresh na všetky pripojené dashboardy |
 
 ### BT Status indikátor
 
@@ -184,11 +191,11 @@ V headeri adminu je live BT status — stav každého pripojeného/odpojeného p
 | 4 | 80–89% | žltá | 4 |
 | 5 | ≥ 90% | červená | 4 |
 
-**Max HR výpočet (Tanaka formula):**
-- Muži: `208 - (0.7 × vek)`
-- Ženy: `206 - (0.88 × vek)`
+**Max HR výpočet (HUNT formula — default):**
+- `211 - (0.64 × vek)` — odporúčané, bližšie k Myzone/Garmin/Wahoo
+- Tanaka / Classic dostupné ako alternatíva cez settings
 
-Jazdec môže mať `max_hr_override` v katalógu ak pozná svoje skutočné MEP z testovania.
+Jazdec môže mať `max_hr_override` v katalógu ak pozná svoje skutočné maximum.
 
 ---
 
@@ -197,18 +204,30 @@ Jazdec môže mať `max_hr_override` v katalógu ak pozná svoje skutočné MEP 
 ```
 GET/POST    /api/bikes
 DELETE      /api/bikes/{id}
-PUT/DELETE  /api/bikes/{id}/strap       — auto-reload gateway
-PUT/DELETE  /api/riders/{position}      — auto-reload gateway (podporuje catalog_id)
+PUT/DELETE  /api/bikes/{id}/strap       — priradenie pásu (ble_address alebo ant_device_id)
+PUT/DELETE  /api/riders/{position}      — riders_cache (podporuje catalog_id)
 GET/POST    /api/rider-catalog
 PUT/DELETE  /api/rider-catalog/{id}
-GET         /api/straps/status          — live connected/hr/battery per strap
-GET         /api/scan                   — BLE scan 10s
+GET/POST    /api/strap-catalog          — katalóg fyzických pásov
+PUT/DELETE  /api/strap-catalog/{id}
+GET         /api/straps/status          — live HR/battery, transport: "ble"|"ant"
+GET         /api/scan                   — BLE scan 10s, auto-register MYZONE-*
+GET         /api/scan-ant               — ANT+ HR scan (8 kanálov wildcard 0x78, 20s)
+GET         /api/scan-ant-all           — ANT+ wildcard scan všetky typy zariadení
 POST        /api/session/start|stop
 GET         /api/session
 GET         /api/sessions
-POST        /api/dashboard-reload       — broadcast refresh na všetky dashboardy
-POST        /api/fix-hdmi               — aktivuje HDMI výstup cez hdmi-helper.py
+GET         /api/sessions/{id}/export.csv
+GET         /api/sessions/{id}/riders/{pos}/export.fit
+POST        /api/dashboard-reload       — broadcast refresh
+POST        /api/fix-hdmi               — xrandr cez hdmi-helper.py (port 8767)
+POST        /api/restart-bt             — reštart bluetooth (port 8768)
+POST        /api/restart-ant            — reštart ANT+ StudioManager
+GET/PUT     /api/settings               — hr_formula: hunt|tanaka|classic
 GET         /api/network                — sieťový stav (eth0/wlp2s0/offline)
+GET/PUT     /api/timer                  — konfigurácia interval timera (rounds, work_min, rest_min)
+POST        /api/timer/start|pause|resume|stop — ovládanie timera
+GET         /api/zone-history           — posledných 10 min zone dát per position (aktívna session)
 ```
 
 ---
@@ -362,11 +381,18 @@ systemctl status hdmi-helper
 
 ## TODO
 
-- [x] FIT súbor export per rider (fit-tool==0.9.15, `GET /api/sessions/{id}/riders/{pos}/export.fit`)
-- [ ] FitReserve sync — `/api/v1/studio/riders/today` → riders_cache pred hodinou
-- [ ] Strava / Garmin Connect upload cez FitReserve
-- [ ] Otestovať s 2+ MZ-1 pásmi súčasne
-- [ ] Presný dátum narodenia jazdcov (birth_year → birth_date) — Tanaka formula z presného veku
+- [x] FIT súbor export per rider
+- [x] ANT+ integrácia (Dynastream ANTUSB2, openant, StudioManager + StrapChannel)
+- [x] ANT+ skener — HR pásy + všetky device typy (FE-C, kadencia...)
+- [x] Katalóg pásov s ANT+ ID, assignment z ANT+ scan výsledkov
+- [x] HUNT formula (211 − 0.64×vek) ako default
+- [x] birth_date (presný vek) namiesto birth_year
+- [x] Interval timer — 2×2 SVG widget na dashboarde, admin panel config, API
+- [x] Dashboard state persistence — localStorage + zone-history endpoint
+- [ ] Overiť `ant_id = serial - 3191516` s ďalším pásom → bulk import 20 pásov
+- [ ] Zistiť či Spinner NXT konzola vysiela ANT+ FE-C/CAD (scan počas šliapania)
+- [ ] RPM display na dashboarde (ak konzola vysiela)
+- [ ] FitReserve sync — riders pred hodinou cez API
 
 ---
 

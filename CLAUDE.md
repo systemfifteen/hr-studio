@@ -168,20 +168,96 @@ PUT/DEL   /api/rider-catalog/{id}
 
 PUT/DEL   /api/riders/{position}        → riders_cache (pre aktuálnu hodinu)
 
-GET       /api/straps/status            → live HR/battery per strap
+GET       /api/straps/status            → live HR/battery per strap, transport: "ble"|"ant"
 GET       /api/scan                     → BLE scan 10s, auto-register MYZONE-*
+GET       /api/scan-ant                 → ANT+ HR scan (wildcard 0x78, 8 kanálov, 20s)
+GET       /api/scan-ant-all             → ANT+ wildcard scan VŠETKY typy (0x00) — FE-C, CAD, HR...
+
+GET/POST  /api/strap-catalog            → katalóg fyzických pásov (label, BLE name, MAC, ANT+ ID)
+PUT/DEL   /api/strap-catalog/{id}
 
 POST      /api/session/start|stop
 GET       /api/session                  → aktuálna session
 GET       /api/sessions                 → história
 GET       /api/sessions/{id}/riders/{pos}/export.fit  → FIT súbor download
+GET       /api/sessions/{id}/export.csv → CSV export celej session
 
 POST      /api/dashboard-reload         → broadcast refresh
 POST      /api/fix-hdmi                 → xrandr cez hdmi-helper.py (port 8767)
 POST      /api/restart-bt               → systemctl restart bluetooth (port 8768)
+POST      /api/restart-ant              → reštartuje ANT+ StudioManager (reload kanálov)
 GET       /api/settings                 → hr_formula
 PUT       /api/settings                 → uloží hr_formula
 GET       /api/network                  → sieťový stav (eth0/wlp2s0)
+
+GET/PUT   /api/timer                    → získa/nastaví konfiguráciu interval timera (rounds, work_min, rest_min)
+POST      /api/timer/start              → štartuje timer, broadcastuje timer_update
+POST      /api/timer/pause              → pauzuje timer
+POST      /api/timer/resume             → obnoví timer
+POST      /api/timer/stop               → zastaví timer (reset do idle)
+GET       /api/zone-history             → posledných 10 min zone dát per bike_position z session_data
+```
+
+---
+
+## Interval timer
+
+**Súbor:** `gateway/interval_timer.py`
+
+Spravuje interval program — e.g. 3× (25 min work + 5 min rest). Stav: `idle` / `running` / `paused`.
+
+```python
+# Konfigurácia
+timer.set_config(rounds=3, work_min=25, rest_min=5)
+# Expanduje na: [work25, rest5, work25, rest5, work25, rest5]
+
+# Elapsed výpočet — presný aj po pause/resume:
+# running: elapsed = elapsed_at_pause + (now - start_epoch)
+# paused:  elapsed = elapsed_at_pause
+
+# Perzistencia:
+timer.save_to_db(db)   # settings key = 'interval_timer', JSON
+timer.load_from_db(db)
+```
+
+**WebSocket broadcast** — každá zmena stavu emituje `timer_update`:
+```json
+{
+  "type": "timer_update",
+  "configured": true,
+  "state": "running",
+  "rounds": 3,
+  "work_min": 25,
+  "rest_min": 5,
+  "intervals": [{"type":"work","duration":1500}, ...],
+  "elapsed": 142.3
+}
+```
+
+**Dashboard rendering (`frontend/dashboard.js`):**
+- `timerActive(state)`: true ak configured && state != "idle"
+- `renderGrid()`: timer cell vložený ako prvý, `grid-column: span 2; grid-row: span 2`; column count += 4 (effective)
+- `renderTimerSVG()`: SVG viewBox="-55 -55 110 110"; outer ring r=48 (OW=6) = farebné segmenty intervalov; inner ring r=36 (IW=12) = stroke-dasharray countdown; elapsed segmenty outer ringu = `#333`
+- `timerTick = setInterval(renderTimerSVG, 500)` — beží len keď timer aktívny
+
+---
+
+## Dashboard state persistence
+
+**LocalStorage** (`hr-studio-riders-v1`):
+- Ukladá: `calories`, `meps` pre každého jazdca
+- Obnovuje: len ak aktívna session (`active=true`) a `started_at` zhoduje s uloženým
+- Ukladá každých 15s + `beforeunload`
+
+**Zone history** — `GET /api/zone-history`:
+- Volá sa po každom `initial_state` WebSocket správe (podmienka: aktívna session)
+- SQLite query: `CAST((julianday(ts) - julianday('1970-01-01')) * 86400000 AS INTEGER)` → UTC ms timestamp
+
+**UTC timezone pitfall (SQLite → JS):**
+```javascript
+// SQLite CURRENT_TIMESTAMP vracia UTC bez 'Z' — new Date() parsuje ako local!
+new Date(d.started_at.replace(' ', 'T') + 'Z')  // správne
+new Date(d.started_at)                            // NESPRÁVNE — +2h offset v SEČ
 ```
 
 ---
@@ -247,22 +323,40 @@ sshpass -p 'hrstudio' ssh adminhrstudio@192.168.1.145 \
 ## ANT+ integrácia
 
 **Dongle:** Dynastream ANTUSB2 Stick (VID: 0x0fcf, PID: 0x1008), prístupný cez `privileged: true` v Docker.
-**udev rule:** `/etc/udev/rules.d/99-ant-dongle.rules` — pre prístup mimo Docker.
+**Library:** `openant>=1.2` + `pyusb>=1.0.2` — import `openant.easy.node/channel` (nie `ant.easy.*`).
 
-**Pridanie ANT+ pásu:**
-```bash
-# Zisti ANT+ device ID pásu (číslo je vytlačené na páse, napr. pre Myzone typ "DEVICE ID")
-# Potom cez admin API:
-curl -X PUT http://192.168.1.145:8766/api/bikes/1/strap \
-  -H 'Content-Type: application/json' \
-  -d '{"ant_device_id": 12345, "label": "Pás č.1"}'
+**Myzone MZ-1 serial → ANT+ device ID:**
+```
+ant_device_id = serial_number - 3191516
+# Príklad: pás 1, serial 3222279 → ANT+ ID 30763 ✓ (overené živým testom)
+# Serials 20 pásov: 1→3222279, 2→3222305, 3→3222314, 4→3222302, 5→3222312,
+#   6→3222315, 7→3222324, 8→3222303, 9→3222313, 10→3222277, 11→3222316,
+#   12→3222278, 13→3222325, 14→3222317, 15→3222322, 16→3222321,
+#   17→3222327, 18→3222326, 19→3222318, 20→3222304
 ```
 
+**Workflow pridania ANT+ pásu:**
+1. Admin panel → Katalóg pásov → Edit → zadaj ANT+ ID (alebo cez ANT+ skener)
+2. Admin panel → Bicykle a pásy → Zmeniť pás → vyber z katalógu → automaticky prenesie aj ANT+ ID
+3. Po uložení sa otvorí ANT+ kanál po reštarte gateway (alebo Restart ANT+ button)
+
 **Stav ANT+ kanálov:** `GET /api/straps/status` — každý záznam má `transport: "ant"` alebo `"ble"`.
+Live stĺpec v admin paneli preferuje connected transport (BLE aj ANT+ bežia súčasne ako fallback).
+
+**Dôležité:** `_assign_strap()` zachováva `ant_device_id` pri BLE re-assigne. Seed.sql nesmie obsahovať strap záznamy s BLE adresou — spôsobuje konflikt po reštarte.
 
 **Súbory:**
 - `gateway/studio_manager.py` — ANT+ manager (vlákno, openant)
 - `gateway/strap_channel.py` — jeden ANT+ kanál = jeden pás
+
+**ANT+ scan — device typy:**
+| Typ | Hex | Popis |
+|-----|-----|-------|
+| HR | 0x78 | Hrudný pás |
+| FE-C | 0x11 | Fitness zariadenie (konzola bicykla) |
+| PWR | 0x0B | Merač výkonu |
+| SPD+CAD | 0x79 | Rýchlosť + kadencia |
+| CAD | 0x7A | Kadencia |
 
 ---
 
@@ -270,5 +364,6 @@ curl -X PUT http://192.168.1.145:8766/api/bikes/1/strap \
 
 - [ ] FIT export end-to-end test (GoldenCheetah ✓, Strava/Garmin Connect?)
 - [ ] FitReserve sync — riders pred hodinou cez API
-- [ ] Test s 2+ MZ-1 pásmi súčasne
-- [ ] Test ANT+ s reálnym pásom (nakonfigurovať ant_device_id cez admin API)
+- [ ] Overiť formulu `ant_id = serial - 3191516` s druhým pásom v gym → bulk import pre všetkých 20
+- [ ] Zistiť či Spinner NXT konzola vysiela ANT+ (FE-C/CAD) — test cez scan-ant-all počas šliapania
+- [ ] Pridať čítanie kadancie (RPM) ak konzola vysiela
