@@ -270,8 +270,12 @@ new Date(d.started_at)                            // NESPRÁVNE — +2h offset v
 docker compose -f docker-compose.standalone.yml build gateway frontend
 docker compose -f docker-compose.standalone.yml up -d
 
-# Git pull + rebuild:
+# Git pull + rebuild (VŽDY build, nie len restart — JS je baked do image!):
 echo 'hrstudio' | sudo -S git -C /opt/hr-studio pull
+echo 'hrstudio' | sudo -S docker compose -f docker-compose.standalone.yml build frontend
+echo 'hrstudio' | sudo -S docker compose -f docker-compose.standalone.yml up -d frontend
+
+# POZOR: `docker compose restart frontend` NESTAČÍ — servíruje starý JS z image
 ```
 
 ### Server (Coolify)
