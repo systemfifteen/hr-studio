@@ -121,6 +121,9 @@ class AdminApi:
         if method == "GET" and path == "/scan-ant":
             return await self._scan_ant()
 
+        if method == "GET" and path == "/scan-ant-all":
+            return await self._scan_ant_all()
+
         # Riders
         if method == "GET" and path == "/straps/status":
             return 200, self._straps_status()
@@ -797,6 +800,130 @@ class AdminApi:
         devices = [v for v in found.values() if v is not None]
         logger.info(f"ANT+ scan hotový — {len(devices)} zariadení nájdených")
 
+        if not devices:
+            return 404, {"error": "Žiadne ANT+ zariadenia nenájdené"}
+        return 200, {"devices": devices, "count": len(devices)}
+
+    async def _scan_ant_all(self):
+        """
+        ANT+ wildcard scan pre VŠETKY typy zariadení (device_type=0).
+        Vráti device_id + device_type pre každé nájdené zariadenie — užitočné
+        na zistenie či spinning bike vysiela kadanciu (FE-C, SPD+CAD, CAD).
+        """
+        import threading
+
+        ANT_SCAN_CHANNELS   = 8
+        ANT_SCAN_TIMEOUT    = 20.0
+        ANTPLUS_NETWORK_KEY = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]
+        DEVICE_TYPE_NAMES   = {
+            0x78: ("HR",       "Hrudný pás"),
+            0x11: ("FE-C",     "Fitness zariadenie (FE-C) — kadencia/výkon"),
+            0x0B: ("PWR",      "Merač výkonu"),
+            0x79: ("SPD+CAD",  "Rýchlosť + kadencia"),
+            0x7A: ("CAD",      "Kadencia"),
+            0x7B: ("SPD",      "Rýchlosť"),
+            0x7C: ("SDM",      "Footpod / krokomér"),
+        }
+
+        logger.info(f"ANT+ all-device scan — {ANT_SCAN_CHANNELS} kanálov, {ANT_SCAN_TIMEOUT}s...")
+
+        if self.ant_manager:
+            if self.ant_manager._node:
+                try:
+                    self.ant_manager._node.stop()
+                except Exception:
+                    pass
+                self.ant_manager._node = None
+            with self.ant_manager._lock:
+                self.ant_manager._channels.clear()
+
+        found    = {}   # channel_num → {"device_id": int, "device_type": int} | None
+        timeouts = set()
+        lock     = threading.Lock()
+        done     = threading.Event()
+
+        def _check_done():
+            with lock:
+                if len(found) + len(timeouts) >= ANT_SCAN_CHANNELS:
+                    done.set()
+
+        def _do_scan():
+            try:
+                from openant.easy.node import Node
+                from openant.easy.channel import Channel
+                from openant.base.message import Message
+
+                node = Node()
+                node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+
+                for ch_num in range(ANT_SCAN_CHANNELS):
+                    ch = node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
+                    ch.set_id(0, 0, 0)   # wildcard — všetky device typy
+                    ch.set_period(8070)
+                    ch.set_rf_freq(57)
+                    ch.set_search_timeout(int(ANT_SCAN_TIMEOUT / 2.5))
+
+                    def make_on_data(n):
+                        def on_data(data):
+                            with lock:
+                                if n not in found:
+                                    found[n] = None
+                            _check_done()
+                        return on_data
+
+                    def make_on_timeout(n):
+                        def on_timeout():
+                            with lock:
+                                timeouts.add(n)
+                            _check_done()
+                        return on_timeout
+
+                    ch.on_broadcast_data = make_on_data(ch_num)
+                    ch.on_search_timeout = make_on_timeout(ch_num)
+                    ch.open()
+
+                t = threading.Thread(target=node.start, daemon=True)
+                t.start()
+
+                done.wait(timeout=ANT_SCAN_TIMEOUT + 5)
+
+                for ch_num in list(found.keys()):
+                    try:
+                        node.ant.request_message(ch_num, Message.ID.RESPONSE_CHANNEL_ID)
+                        _, event, data = node.wait_for_special(Message.ID.RESPONSE_CHANNEL_ID)
+                        dev_id   = data[1] | (data[2] << 8)
+                        dev_type = data[3]
+                        with lock:
+                            found[ch_num] = {"device_id": dev_id, "device_type": dev_type}
+                        logger.info(f"ANT+ kanál {ch_num}: device {dev_id} type 0x{dev_type:02X}")
+                    except Exception as e:
+                        logger.warning(f"ANT+ kanál {ch_num}: nepodarilo sa získať info: {e}")
+
+                node.stop()
+            except Exception as e:
+                logger.error(f"ANT+ all-scan chyba: {e}")
+            finally:
+                if self.ant_manager:
+                    self.ant_manager.load_and_start()
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _do_scan)
+
+        seen_ids = set()
+        devices  = []
+        for v in found.values():
+            if v and v["device_id"] and v["device_id"] not in seen_ids:
+                seen_ids.add(v["device_id"])
+                type_code = v["device_type"]
+                short, desc = DEVICE_TYPE_NAMES.get(type_code, (f"0x{type_code:02X}", "Neznámy typ"))
+                devices.append({
+                    "device_id":        v["device_id"],
+                    "device_type":      type_code,
+                    "device_type_short": short,
+                    "device_type_desc":  desc,
+                })
+
+        logger.info(f"ANT+ all-scan hotový — {len(devices)} unikátnych zariadení")
         if not devices:
             return 404, {"error": "Žiadne ANT+ zariadenia nenájdené"}
         return 200, {"devices": devices, "count": len(devices)}

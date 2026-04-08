@@ -300,6 +300,17 @@ input[type=number]{width:90px}
     </div>
   </section>
 
+  <!-- ANT+ all-device scanner -->
+  <section>
+    <h2>ANT+ skener — všetky zariadenia</h2>
+    <p style="color:#888;font-size:13px;margin:0 0 10px">Nájde všetky ANT+ zariadenia v dosahu (HR pásy, FE-C konzoly, kadencia, výkon…). Šliap na bicykli počas skenu aby konzola vysielala.</p>
+    <div class="form-row">
+      <button class="btn btn-primary" id="btn-scan-ant-all" onclick="doScanAntAll()">⦿ ANT+ scan (20s)</button>
+      <div id="scan-ant-all-spinner"><div class="spinner"></div> Skenujem ANT+ zariadenia (20s)…</div>
+    </div>
+    <div id="scan-ant-all-results"></div>
+  </section>
+
   <!-- Sessions history -->
   <section>
     <h2>História sessions <span class="badge warn" id="sessions-count">0</span></h2>
@@ -744,6 +755,58 @@ function cancelAssign() {
   selectedDevice = null;
   document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('assign-row').style.display = 'none';
+}
+
+// ── ANT+ all-device scan ───────────────────────────────────────────────────
+async function doScanAntAll() {
+  const btn     = document.getElementById('btn-scan-ant-all');
+  const spinner = document.getElementById('scan-ant-all-spinner');
+  const results = document.getElementById('scan-ant-all-results');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  results.innerHTML = '';
+
+  try {
+    const r = await fetch(`${API}/scan-ant-all`);
+    const d = await r.json();
+    if (!r.ok || !d.devices?.length) {
+      results.innerHTML = '<p style="color:#666;font-size:13px">Žiadne ANT+ zariadenia nenájdené.</p>';
+      return;
+    }
+    const typeColor = { HR: '#e05070', 'FE-C': '#7aadff', PWR: '#ffcc55', CAD: '#4caf78', 'SPD+CAD': '#4caf78', SPD: '#aaa', SDM: '#aaa' };
+    results.innerHTML = `
+      <table class="tbl" style="margin-top:10px">
+        <thead><tr><th>Device ID</th><th>Typ</th><th>Popis</th><th></th></tr></thead>
+        <tbody>
+          ${d.devices.map(dev => {
+            const color = typeColor[dev.device_type_short] || '#aaa';
+            const isHr  = dev.device_type === 0x78;
+            return `<tr>
+              <td style="font-family:monospace;font-size:14px"><strong>${dev.device_id}</strong></td>
+              <td><span style="color:${color};font-weight:600;font-size:12px">${dev.device_type_short}</span><span style="color:#444;font-size:11px;margin-left:6px">0x${dev.device_type.toString(16).padStart(2,'0').toUpperCase()}</span></td>
+              <td style="color:#aaa;font-size:13px">${dev.device_type_desc}</td>
+              <td style="text-align:right">${isHr
+                ? `<button class="btn btn-secondary btn-small" onclick="antIdToCatalog(${dev.device_id})">→ Katalóg</button>`
+                : ''}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <p style="color:#555;font-size:12px;margin-top:8px">Nájdených: ${d.count} zariadení</p>`;
+  } catch(e) {
+    results.innerHTML = '<p style="color:#e05070;font-size:13px">Chyba skenu — skontroluj ANT+ dongle.</p>';
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function antIdToCatalog(deviceId) {
+  // Scroll na katalóg a prefill ANT+ ID pole
+  document.getElementById('cat-ant-id').value = deviceId;
+  document.getElementById('cat-ant-id').focus();
+  document.getElementById('cat-ant-id').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  toast(`ANT+ ID ${deviceId} skopírovaný do formulára katalógu`, 'success');
 }
 
 async function doAssign() {
