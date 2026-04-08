@@ -238,7 +238,18 @@ function handleMessage(msg) {
           calories:    saved.calories ?? 0,
           meps:        saved.meps     ?? 0,
           zoneHistory: saved.zoneHistory || [],
+          hidden:      saved.hidden   ?? false,
         };
+        // Ak je odpojený a ešte nie je skrytý ani nemá bežiaci timer → spusti
+        if (!r.connected && !riders[r.position].hidden && !hideTimers[r.position]) {
+          hideTimers[r.position] = setTimeout(() => {
+            if (riders[r.position]) {
+              riders[r.position].hidden = true;
+              renderGrid();
+            }
+            delete hideTimers[r.position];
+          }, HIDE_DELAY_MS);
+        }
       });
       renderGrid();
       if (msg.timer) applyTimerState(msg.timer);
