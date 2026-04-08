@@ -27,6 +27,39 @@ const ZONE_HISTORY_COLORS = {
 let riders = {};   // position → {name, hr, pct, zone, calories, connected}
 let ws = null;
 
+// ── Persistencia stavu (localStorage) ────────────────────────────────────────
+const STORAGE_KEY = 'hr-studio-riders-v1';
+
+function saveRidersState() {
+  if (!Object.keys(riders).length) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), data: riders }));
+  } catch (e) {}
+}
+
+async function tryRestoreRidersState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const { savedAt, data } = JSON.parse(raw);
+    if (Date.now() - savedAt > 30 * 60 * 1000) {          // staršie ako 30 min → zahodiť
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    const res = await fetch('/api/session');
+    if (!res.ok) return;
+    const session = await res.json();
+    if (!session.active) return;                            // žiadna aktívna session
+    const sessionStart = new Date(session.started_at.replace(' ', 'T') + 'Z').getTime();
+    if (savedAt < sessionStart - 5000) return;             // uložené pred touto session
+    Object.assign(riders, data);
+  } catch (e) {}
+}
+
+// Ukladaj každých 15 sekúnd + pri zatvorení stránky
+setInterval(saveRidersState, 15000);
+window.addEventListener('beforeunload', saveRidersState);
+
 // ── Interval timer ────────────────────────────────────────────────────────────
 let timerState = null;   // posledný stav z WS
 let timerTick  = null;   // setInterval handle
@@ -192,7 +225,17 @@ function handleMessage(msg) {
   switch (msg.type) {
     case "initial_state":
       msg.riders.forEach((r) => {
-        riders[r.position] = { ...r, pct: 0, zone: 0, calories: 0, bike_label: r.bike_label };
+        const saved = riders[r.position] || {};
+        // Metadata zo servera, akumulované dáta z pamäte (príp. obnovenej z localStorage)
+        riders[r.position] = {
+          ...r,
+          bike_label:  r.bike_label,
+          pct:         saved.pct      ?? 0,
+          zone:        saved.zone     ?? 0,
+          calories:    saved.calories ?? 0,
+          meps:        saved.meps     ?? 0,
+          zoneHistory: saved.zoneHistory || [],
+        };
       });
       renderGrid();
       if (msg.timer) applyTimerState(msg.timer);
@@ -233,6 +276,7 @@ function handleMessage(msg) {
       break;
 
     case "session_stopped":
+      localStorage.removeItem(STORAGE_KEY);
       if (msg.summary?.length) showSummary(msg.summary);
       break;
   }
@@ -471,4 +515,8 @@ async function fetchAndMergeRiders() {
   }
 }
 
-connect();
+async function init() {
+  await tryRestoreRidersState();
+  connect();
+}
+init();
