@@ -14,12 +14,13 @@ SCAN_TIMEOUT = 10.0
 
 
 class AdminApi:
-    def __init__(self, cache_db: str, manager, broadcast_fn, session_mgr=None, ant_manager=None):
+    def __init__(self, cache_db: str, manager, broadcast_fn, session_mgr=None, ant_manager=None, timer=None):
         self.cache_db     = cache_db
         self.manager      = manager
         self.ant_manager  = ant_manager
         self.broadcast_fn = broadcast_fn
         self.session_mgr  = session_mgr
+        self.timer        = timer
         self._ensure_catalog_table()
 
     def _ensure_catalog_table(self):
@@ -214,6 +215,25 @@ class AdminApi:
                 return self._update_catalog(catalog_id, data)
             if method == "DELETE":
                 return self._delete_catalog(catalog_id)
+
+        # Interval timer
+        if method == "GET" and path == "/timer":
+            return 200, (self.timer.get_ws_state() if self.timer else {"configured": False})
+
+        if method == "PUT" and path == "/timer":
+            return await self._config_timer(data)
+
+        if method == "POST" and path == "/timer/start":
+            return await self._ctrl_timer("start")
+
+        if method == "POST" and path == "/timer/pause":
+            return await self._ctrl_timer("pause")
+
+        if method == "POST" and path == "/timer/resume":
+            return await self._ctrl_timer("resume")
+
+        if method == "POST" and path == "/timer/stop":
+            return await self._ctrl_timer("stop")
 
         # Settings
         if method == "GET" and path == "/settings":
@@ -686,6 +706,46 @@ class AdminApi:
             self.ant_manager.reload()
             return 200, {"ok": True}
         return 200, {"ok": True, "note": "ant_manager not running"}
+
+    # ── Interval timer ────────────────────────────────────────────────────────
+
+    async def _config_timer(self, data):
+        if not self.timer:
+            return 503, {"error": "timer not available"}
+        try:
+            rounds   = int(data.get("rounds",   3))
+            work_min = int(data.get("work_min", 25))
+            rest_min = int(data.get("rest_min",  5))
+        except (TypeError, ValueError):
+            return 400, {"error": "rounds/work_min/rest_min must be integers"}
+        self.timer.set_config(rounds, work_min, rest_min)
+        db = self._db()
+        self.timer.save_to_db(db)
+        db.commit()
+        db.close()
+        await self.broadcast_fn(self.timer.get_ws_state())
+        return 200, self.timer.get_ws_state()
+
+    async def _ctrl_timer(self, action: str):
+        if not self.timer:
+            return 503, {"error": "timer not available"}
+        ok = False
+        if action == "start":
+            ok = self.timer.start()
+        elif action == "pause":
+            ok = self.timer.pause()
+        elif action == "resume":
+            ok = self.timer.resume()
+        elif action == "stop":
+            ok = self.timer.stop()
+        if not ok:
+            return 400, {"error": f"cannot {action} in state '{self.timer.state}'"}
+        db = self._db()
+        self.timer.save_to_db(db)
+        db.commit()
+        db.close()
+        await self.broadcast_fn(self.timer.get_ws_state())
+        return 200, self.timer.get_ws_state()
 
     async def _reload(self):
         if self.manager:

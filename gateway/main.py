@@ -8,7 +8,8 @@ import websockets
 from ble_manager import BleManager
 from studio_manager import StudioManager
 from admin_api import AdminApi
-from session_manager import SessionManager   # sekúnd
+from session_manager import SessionManager
+from interval_timer import IntervalTimer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,6 +27,7 @@ manager: BleManager | None = None
 ant_manager: StudioManager | None = None
 admin_api: AdminApi | None = None
 session_mgr: SessionManager | None = None
+timer: IntervalTimer | None = None
 
 
 async def broadcast(data: dict):
@@ -47,11 +49,11 @@ async def ws_handler(ws, path):
         all_riders.extend(manager.get_status())
     if ant_manager:
         all_riders.extend(ant_manager.get_status())
-    if all_riders:
-        await ws.send(json.dumps({
-            "type":   "initial_state",
-            "riders": all_riders,
-        }))
+    await ws.send(json.dumps({
+        "type":   "initial_state",
+        "riders": all_riders,
+        "timer":  timer.get_ws_state() if timer else {"type": "timer_update", "configured": False},
+    }))
 
     try:
         await ws.wait_closed()
@@ -171,10 +173,17 @@ def ensure_bikes():
 
 
 async def main():
-    global manager, ant_manager, admin_api, session_mgr
+    global manager, ant_manager, admin_api, session_mgr, timer
 
     ensure_bikes()
     session_mgr = SessionManager(cache_db=CACHE_DB, broadcast_fn=broadcast)
+
+    import sqlite3 as _sqlite3
+    timer = IntervalTimer()
+    _db = _sqlite3.connect(CACHE_DB)
+    timer.load_from_db(_db)
+    _db.close()
+    logger.info(f"Interval timer: stav={timer.state}, rounds={timer.rounds}, work={timer.work_min}min, rest={timer.rest_min}min")
 
     manager = BleManager(
         cache_db    = CACHE_DB,
@@ -198,6 +207,7 @@ async def main():
         broadcast_fn= broadcast,
         session_mgr = session_mgr,
         ant_manager = ant_manager,
+        timer       = timer,
     )
 
     ant_manager.load_and_start()

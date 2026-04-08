@@ -27,6 +27,128 @@ const ZONE_HISTORY_COLORS = {
 let riders = {};   // position → {name, hr, pct, zone, calories, connected}
 let ws = null;
 
+// ── Interval timer ────────────────────────────────────────────────────────────
+let timerState = null;   // posledný stav z WS
+let timerTick  = null;   // setInterval handle
+
+function applyTimerState(state) {
+  timerState = state;
+  const widget = document.getElementById("timer-widget");
+  if (!state.configured || state.state === "idle") {
+    widget.classList.remove("visible");
+    if (timerTick) { clearInterval(timerTick); timerTick = null; }
+    return;
+  }
+  widget.classList.add("visible");
+  renderTimerSVG();
+  if (!timerTick) {
+    timerTick = setInterval(renderTimerSVG, 500);
+  }
+}
+
+function timerElapsed() {
+  if (!timerState) return 0;
+  let e = timerState.elapsed_at_pause || 0;
+  if (timerState.is_running && timerState.start_epoch) {
+    e += Date.now() / 1000 - timerState.start_epoch;
+  }
+  return Math.min(e, timerState.total_sec);
+}
+
+function timerArcPath(r, startDeg, endDeg) {
+  const toRad = d => (d - 90) * Math.PI / 180;
+  const x1 = r * Math.cos(toRad(startDeg));
+  const y1 = r * Math.sin(toRad(startDeg));
+  const x2 = r * Math.cos(toRad(endDeg));
+  const y2 = r * Math.sin(toRad(endDeg));
+  const sweep = ((endDeg - startDeg) % 360 + 360) % 360;
+  const large = sweep > 180 ? 1 : 0;
+  return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`;
+}
+
+function renderTimerSVG() {
+  const svg = document.getElementById("timer-svg");
+  if (!svg || !timerState || !timerState.configured) return;
+
+  const { intervals, total_sec, is_paused } = timerState;
+  const elapsed = timerElapsed();
+
+  // Zisti aktuálny interval
+  let cumSec = 0, currentIdx = intervals.length - 1, timeIntoInterval = elapsed;
+  for (let i = 0; i < intervals.length; i++) {
+    if (elapsed < cumSec + intervals[i].duration) {
+      currentIdx = i;
+      timeIntoInterval = elapsed - cumSec;
+      break;
+    }
+    cumSec += intervals[i].duration;
+  }
+  const done = elapsed >= total_sec;
+  const cur  = intervals[currentIdx];
+  const remaining = done ? 0 : Math.max(0, cur.duration - timeIntoInterval);
+  const remainFrac = done ? 0 : remaining / cur.duration;
+
+  const WORK_COL = "#e07020";
+  const REST_COL = "#2472c8";
+  const col = t => t === "work" ? WORK_COL : REST_COL;
+
+  // ── Outer ring (program segments) ──────────────────────────────────────────
+  const OR = 48, OW = 6, GAP = 1.5;
+  let outerHTML = `<circle r="${OR}" fill="none" stroke="#1c1c1c" stroke-width="${OW}"/>`;
+  let angleDeg = 0;
+  let cumForSeg = 0;
+  for (let i = 0; i < intervals.length; i++) {
+    const iv = intervals[i];
+    const sweepDeg = (iv.duration / total_sec) * 360;
+    const s = angleDeg + GAP;
+    const e = angleDeg + sweepDeg - GAP;
+    if (e > s) {
+      let opacity;
+      if (done)           opacity = 1.0;
+      else if (i < currentIdx) opacity = 0.25;
+      else if (i === currentIdx) opacity = 1.0;
+      else opacity = 0.45;
+      const d = timerArcPath(OR, s, e);
+      outerHTML += `<path d="${d}" fill="none" stroke="${col(iv.type)}" stroke-width="${OW}" opacity="${opacity}" stroke-linecap="butt"/>`;
+    }
+    angleDeg  += sweepDeg;
+    cumForSeg += iv.duration;
+  }
+
+  // ── Inner countdown ring ───────────────────────────────────────────────────
+  const IR = 36, IW = 12;
+  const IC = 2 * Math.PI * IR;
+  const dash = remainFrac * IC;
+  const innerCol = done ? "#3a3a3a" : col(cur.type);
+  const innerHTML = `
+    <circle r="${IR}" fill="none" stroke="#111" stroke-width="${IW}"/>
+    <circle r="${IR}" fill="none" stroke="${innerCol}" stroke-width="${IW}"
+      stroke-dasharray="${dash.toFixed(2)} ${IC.toFixed(2)}"
+      transform="rotate(-90)"
+      stroke-linecap="butt"/>`;
+
+  // ── Center bg ──────────────────────────────────────────────────────────────
+  const centerBg = `<circle r="${IR - IW / 2 - 1}" fill="#0f0f0f"/>`;
+
+  // ── Center text ────────────────────────────────────────────────────────────
+  let centerHTML;
+  if (done) {
+    centerHTML = `<text y="5" text-anchor="middle" fill="#e07020" font-size="12" font-weight="700" font-family="sans-serif">Koniec!</text>`;
+  } else {
+    const mins = Math.floor(remaining / 60);
+    const secs = Math.floor(remaining % 60);
+    const timeStr = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    const label = is_paused ? `⏸ ${cur.label}` : cur.label;
+    const progress = `${currentIdx + 1} / ${intervals.length}`;
+    centerHTML = `
+      <text y="-3" text-anchor="middle" fill="#fff" font-size="19" font-weight="700" font-family="sans-serif">${timeStr}</text>
+      <text y="11" text-anchor="middle" fill="rgba(255,255,255,.65)" font-size="8.5" font-family="sans-serif">${label}</text>
+      <text y="21" text-anchor="middle" fill="rgba(255,255,255,.35)" font-size="7.5" font-family="sans-serif">${progress}</text>`;
+  }
+
+  svg.innerHTML = outerHTML + innerHTML + centerBg + centerHTML;
+}
+
 function connect() {
   ws = new WebSocket(WS_URL);
 
@@ -57,6 +179,11 @@ function handleMessage(msg) {
         riders[r.position] = { ...r, pct: 0, zone: 0, calories: 0, bike_label: r.bike_label };
       });
       renderGrid();
+      if (msg.timer) applyTimerState(msg.timer);
+      break;
+
+    case "timer_update":
+      applyTimerState(msg);
       break;
 
     case "hr_update":

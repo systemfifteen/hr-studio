@@ -311,6 +311,45 @@ input[type=number]{width:90px}
     <div id="scan-ant-all-results"></div>
   </section>
 
+  <!-- Interval timer -->
+  <section>
+    <h2>Interval Timer</h2>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- Config -->
+      <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:16px;min-width:280px">
+        <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Konfigurácia</div>
+        <div class="form-row" style="align-items:center;gap:10px">
+          <label style="width:90px;color:#aaa;font-size:13px">Kolá</label>
+          <input type="number" id="t-rounds" value="3" min="1" max="20" style="width:60px" oninput="updateTimerPreview()">
+        </div>
+        <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
+          <label style="width:90px;color:#aaa;font-size:13px">Záťaž (min)</label>
+          <input type="number" id="t-work" value="25" min="1" max="120" style="width:60px" oninput="updateTimerPreview()">
+        </div>
+        <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
+          <label style="width:90px;color:#aaa;font-size:13px">Voľno (min)</label>
+          <input type="number" id="t-rest" value="5" min="0" max="60" style="width:60px" oninput="updateTimerPreview()">
+        </div>
+        <div id="t-preview" style="margin-top:12px;font-size:12px;color:#888"></div>
+        <button class="btn btn-secondary" style="margin-top:12px" onclick="saveTimerConfig()">Uložiť konfig</button>
+      </div>
+
+      <!-- Controls -->
+      <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:16px;min-width:200px">
+        <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Ovládanie</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="t-btn-start"  onclick="ctrlTimer('start')"  style="display:none">▶ Štart</button>
+          <button class="btn btn-secondary" id="t-btn-pause"  onclick="ctrlTimer('pause')"  style="display:none">⏸ Pauza</button>
+          <button class="btn btn-secondary" id="t-btn-resume" onclick="ctrlTimer('resume')" style="display:none">▶ Pokračovať</button>
+          <button class="btn btn-danger"    id="t-btn-stop"   onclick="ctrlTimer('stop')"   style="display:none">■ Stop</button>
+        </div>
+        <div id="t-status" style="margin-top:12px;font-size:13px;color:#888">Načítavam...</div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- Sessions history -->
   <section>
     <h2>História sessions <span class="badge warn" id="sessions-count">0</span></h2>
@@ -1409,6 +1448,90 @@ async function deleteRiderCatalog() {
   loadRiderCatalog();
 }
 
+// ── Interval timer ──────────────────────────────────────────────────────────
+let _timerState = null;
+
+function updateTimerPreview() {
+  const rounds   = parseInt(document.getElementById('t-rounds').value) || 0;
+  const workMin  = parseInt(document.getElementById('t-work').value)   || 0;
+  const restMin  = parseInt(document.getElementById('t-rest').value)   || 0;
+  const total    = rounds * (workMin + restMin);
+  const segments = restMin > 0
+    ? Array.from({length: rounds}, () => `${workMin}+${restMin}`).join(' · ')
+    : Array.from({length: rounds}, () => `${workMin}`).join(' · ');
+  document.getElementById('t-preview').textContent =
+    `Program: ${segments} min  |  Celkom: ${total} min`;
+}
+
+function applyAdminTimerState(s) {
+  _timerState = s;
+  const st     = s.configured ? s.state : 'idle';
+  const status = document.getElementById('t-status');
+  const btnStart  = document.getElementById('t-btn-start');
+  const btnPause  = document.getElementById('t-btn-pause');
+  const btnResume = document.getElementById('t-btn-resume');
+  const btnStop   = document.getElementById('t-btn-stop');
+
+  btnStart.style.display  = st === 'idle'    ? '' : 'none';
+  btnPause.style.display  = st === 'running' ? '' : 'none';
+  btnResume.style.display = st === 'paused'  ? '' : 'none';
+  btnStop.style.display   = st !== 'idle'    ? '' : 'none';
+
+  if (!s.configured) {
+    status.textContent = 'Nie je nakonfigurovaný — najprv ulož konfig.';
+    return;
+  }
+  if (st === 'idle') {
+    status.textContent = `Pripravený: ${s.rounds}× (${s.work_min}+${s.rest_min}) min — ${s.total_sec / 60} min celkom`;
+  } else if (st === 'running') {
+    const elapsed = Math.floor((s.elapsed_at_pause || 0) + (Date.now() / 1000 - (s.start_epoch || 0)));
+    status.innerHTML = `<span style="color:#4caf78">▶ Beží</span> — ${s.rounds}× (${s.work_min}+${s.rest_min}) min`;
+  } else {
+    status.innerHTML = `<span style="color:#e0a020">⏸ Pauza</span> — ${s.rounds}× (${s.work_min}+${s.rest_min}) min`;
+  }
+
+  // Sync form hodnoty
+  document.getElementById('t-rounds').value = s.rounds   || 3;
+  document.getElementById('t-work').value   = s.work_min || 25;
+  document.getElementById('t-rest').value   = s.rest_min || 5;
+  updateTimerPreview();
+}
+
+async function loadTimer() {
+  try {
+    const r = await fetch(`${API}/timer`);
+    applyAdminTimerState(await r.json());
+  } catch { /* gateway offline */ }
+}
+
+async function saveTimerConfig() {
+  const rounds   = parseInt(document.getElementById('t-rounds').value);
+  const work_min = parseInt(document.getElementById('t-work').value);
+  const rest_min = parseInt(document.getElementById('t-rest').value);
+  if (!rounds || !work_min) { toast('Kolá a záťaž sú povinné', 'error'); return; }
+  const r = await fetch(`${API}/timer`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ rounds, work_min, rest_min }),
+  });
+  if (r.ok) {
+    applyAdminTimerState(await r.json());
+    toast('Konfig uložený', 'success');
+  } else {
+    toast('Chyba uloženia', 'error');
+  }
+}
+
+async function ctrlTimer(action) {
+  const r = await fetch(`${API}/timer/${action}`, { method: 'POST' });
+  if (r.ok) {
+    applyAdminTimerState(await r.json());
+  } else {
+    const e = await r.json().catch(() => ({}));
+    toast(e.error || `Chyba: ${action}`, 'error');
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 loadStatus();
 loadBikes();
@@ -1417,6 +1540,8 @@ loadStrapStatus();
 loadStrapCatalog();
 loadSettings().then(() => loadRiderCatalog());
 loadSessions();
+loadTimer();
+updateTimerPreview();
 setInterval(loadStatus, 30000);
 setInterval(loadStrapStatus, 3000);
 
