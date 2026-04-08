@@ -31,18 +31,25 @@ let ws = null;
 let timerState = null;   // posledný stav z WS
 let timerTick  = null;   // setInterval handle
 
+function timerActive(state) {
+  return state && state.configured && state.state !== "idle";
+}
+
 function applyTimerState(state) {
+  const wasActive = timerActive(timerState);
   timerState = state;
-  const widget = document.getElementById("timer-widget");
-  if (!state.configured || state.state === "idle") {
-    widget.classList.remove("visible");
-    if (timerTick) { clearInterval(timerTick); timerTick = null; }
-    return;
+  const isActive = timerActive(state);
+
+  if (wasActive !== isActive) {
+    renderGrid();   // Pridá alebo odoberie timer bunku z gridu
+  } else if (isActive) {
+    renderTimerSVG();
   }
-  widget.classList.add("visible");
-  renderTimerSVG();
-  if (!timerTick) {
-    timerTick = setInterval(renderTimerSVG, 500);
+
+  if (isActive) {
+    if (!timerTick) timerTick = setInterval(renderTimerSVG, 500);
+  } else {
+    if (timerTick) { clearInterval(timerTick); timerTick = null; }
   }
 }
 
@@ -223,14 +230,20 @@ function handleMessage(msg) {
 }
 
 function renderGrid() {
+  const hasTimer = timerActive(timerState);
   const positions = Object.keys(riders).map(Number).sort((a, b) => {
     const nameA = (riders[a].name || '').toLowerCase();
     const nameB = (riders[b].name || '').toLowerCase();
     return nameA.localeCompare(nameB);
   });
   const count = positions.length;
-  const cols = count === 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
-  const rows = Math.ceil(count / cols);
+  // Timer zaberá 2×2 = 4 sloty; zabezpeč min. 2 stĺpce
+  const effective = count + (hasTimer ? 4 : 0);
+  const cols = Math.max(
+    hasTimer ? 2 : 1,
+    effective <= 1 ? 1 : effective <= 4 ? 2 : effective <= 9 ? 3 : effective <= 16 ? 4 : 5
+  );
+  const rows = Math.ceil(effective / cols);
 
   const grid = document.getElementById("grid");
   const GAP = 8, PAD = 10;
@@ -246,6 +259,15 @@ function renderGrid() {
   grid.style.justifyContent      = "center";
   document.documentElement.style.setProperty("--cell", cell + "px");
   grid.innerHTML = "";
+
+  // Timer bunka — vložená ako prvá, span 2×2
+  if (hasTimer) {
+    const tc = document.createElement("div");
+    tc.id = "timer-cell";
+    tc.innerHTML = `<svg id="timer-svg" viewBox="-55 -55 110 110" width="100%" height="100%"></svg>`;
+    grid.appendChild(tc);
+    renderTimerSVG();
+  }
 
   positions.forEach((pos) => {
     const r = riders[pos];
