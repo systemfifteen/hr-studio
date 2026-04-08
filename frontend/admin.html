@@ -181,9 +181,9 @@ input[type=number]{width:90px}
         <select id="session-duration-select" style="width:130px">
           <option value="60">60 min</option>
           <option value="90">90 min</option>
-          <option value="120">120 min</option>
+          <option value="120" selected>120 min</option>
           <option value="180">180 min (maratón)</option>
-          <option value="" selected>bez limitu</option>
+          <option value="">bez limitu</option>
         </select>
         <button class="btn btn-primary" onclick="startSession()">▶ Štart hodiny</button>
       </div>
@@ -1004,7 +1004,7 @@ async function loadSession() {
 }
 
 function showSessionActive(d) {
-  sessionStartedAt = new Date(d.started_at);
+  sessionStartedAt = new Date(d.started_at.replace(' ', 'T') + 'Z');
   document.getElementById('session-active').style.display = 'block';
   document.getElementById('session-idle').style.display   = 'none';
   document.getElementById('sess-label-val').textContent   = d.label;
