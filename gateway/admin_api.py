@@ -216,6 +216,10 @@ class AdminApi:
             if method == "DELETE":
                 return self._delete_catalog(catalog_id)
 
+        # Zone history (posledných 10 min aktívnej session, pre obnovu po refreshi)
+        if method == "GET" and path == "/zone-history":
+            return 200, self._get_zone_history()
+
         # Interval timer
         if method == "GET" and path == "/timer":
             return 200, (self.timer.get_ws_state() if self.timer else {"configured": False})
@@ -706,6 +710,33 @@ class AdminApi:
             self.ant_manager.reload()
             return 200, {"ok": True}
         return 200, {"ok": True, "note": "ant_manager not running"}
+
+    # ── Zone history ──────────────────────────────────────────────────────────
+
+    def _get_zone_history(self):
+        db = self._db()
+        session = db.execute(
+            "SELECT id FROM sessions WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if not session:
+            db.close()
+            return {"history": {}}
+        rows = db.execute("""
+            SELECT bike_position,
+                   zone,
+                   CAST((julianday(ts) - julianday('1970-01-01')) * 86400000 AS INTEGER) AS ts_ms
+            FROM   session_data
+            WHERE  session_id = ?
+              AND  ts >= datetime('now', '-10 minutes')
+            ORDER  BY ts ASC
+        """, (session[0],)).fetchall()
+        db.close()
+        history = {}
+        for pos, zone, ts_ms in rows:
+            if pos not in history:
+                history[pos] = []
+            history[pos].append({"zone": zone, "ts": ts_ms})
+        return {"history": history}
 
     # ── Interval timer ────────────────────────────────────────────────────────
 

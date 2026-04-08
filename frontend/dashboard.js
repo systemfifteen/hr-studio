@@ -227,7 +227,6 @@ function handleMessage(msg) {
     case "initial_state":
       msg.riders.forEach((r) => {
         const saved = riders[r.position] || {};
-        // Metadata zo servera, akumulované dáta z pamäte (príp. obnovenej z localStorage)
         riders[r.position] = {
           ...r,
           bike_label:  r.bike_label,
@@ -240,6 +239,7 @@ function handleMessage(msg) {
       });
       renderGrid();
       if (msg.timer) applyTimerState(msg.timer);
+      restoreZoneHistory();   // dotiahni históriu zón z DB (spoľahlivejšie ako localStorage)
       break;
 
     case "timer_update":
@@ -514,6 +514,22 @@ async function fetchAndMergeRiders() {
     console.warn("fetchAndMergeRiders zlyhalo, reloading:", e);
     location.reload();
   }
+}
+
+async function restoreZoneHistory() {
+  try {
+    const res = await fetch('/api/zone-history');
+    if (!res.ok) return;
+    const { history } = await res.json();
+    let changed = false;
+    for (const [pos, entries] of Object.entries(history)) {
+      if (riders[pos] && entries.length) {
+        riders[pos].zoneHistory = entries;
+        changed = true;
+      }
+    }
+    if (changed) renderGrid();
+  } catch (e) {}
 }
 
 async function init() {
