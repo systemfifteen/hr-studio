@@ -304,48 +304,51 @@ input[type=number]{width:100px}
     </div>
   </section>
 
-  <!-- BLE scanner -->
+  <!-- Skenery -->
   <section class="collapsed">
     <div class="sec-hdr" onclick="toggleSection(this)">
-      <h2>BLE skener</h2>
+      <h2>Skenery — BLE &amp; ANT+</h2>
       <span class="sec-arrow">▾</span>
     </div>
     <div class="section-body">
-      <div class="form-row">
-        <button class="btn btn-primary" id="btn-scan" onclick="doScan()">⦿ Spustiť scan (10s)</button>
-        <div id="scan-spinner"><div class="spinner"></div> Skenujem BLE zariadenia...</div>
-      </div>
-      <div id="scan-list"></div>
-      <div id="assign-row" style="display:none;margin-top:14px">
-        <div class="form-row">
-          <label>Bicykel:</label>
-          <select id="assign-bike-select"></select>
-          <label>Z katalógu:</label>
-          <select id="assign-catalog-select" onchange="onCatalogSelectChange()">
-            <option value="">— zadaj ručne —</option>
-          </select>
-          <input id="assign-strap-label" type="text" placeholder="Štítok pásu" style="width:160px">
-          <button class="btn btn-primary" onclick="doAssign()">Priradiť</button>
-          <button class="btn btn-secondary" onclick="cancelAssign()">Zrušiť</button>
-        </div>
-        <div id="assign-info" style="font-size:14px;color:#888;margin-top:4px"></div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ANT+ all-device scanner -->
-  <section class="collapsed">
-    <div class="sec-hdr" onclick="toggleSection(this)">
-      <h2>ANT+ skener</h2>
-      <span class="sec-arrow">▾</span>
-    </div>
-    <div class="section-body">
-      <p style="color:#888;font-size:15px;margin:0 0 12px">Nájde všetky ANT+ zariadenia v dosahu (HR pásy, FE-C konzoly, kadencia, výkon…). Šliap na bicykli počas skenu aby konzola vysielala.</p>
-      <div class="form-row">
-        <button class="btn btn-primary" id="btn-scan-ant-all" onclick="doScanAntAll()">⦿ ANT+ scan (20s)</button>
-        <div id="scan-ant-all-spinner"><div class="spinner"></div> Skenujem ANT+ zariadenia (20s)…</div>
+      <!-- BLE -->
+      <div style="margin-bottom:24px">
+        <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">BLE skener</div>
+        <div class="form-row">
+          <button class="btn btn-primary" id="btn-scan" onclick="doScan()">⦿ BLE scan (10s)</button>
+          <div id="scan-spinner"><div class="spinner"></div> Skenujem BLE zariadenia...</div>
+        </div>
+        <div id="scan-list"></div>
+        <div id="assign-row" style="display:none;margin-top:14px">
+          <div class="form-row">
+            <label>Bicykel:</label>
+            <select id="assign-bike-select"></select>
+            <label>Z katalógu:</label>
+            <select id="assign-catalog-select" onchange="onCatalogSelectChange()">
+              <option value="">— zadaj ručne —</option>
+            </select>
+            <input id="assign-strap-label" type="text" placeholder="Štítok pásu" style="width:160px">
+            <button class="btn btn-primary" onclick="doAssign()">Priradiť</button>
+            <button class="btn btn-secondary" onclick="cancelAssign()">Zrušiť</button>
+          </div>
+          <div id="assign-info" style="font-size:14px;color:#888;margin-top:4px"></div>
+        </div>
       </div>
-      <div id="scan-ant-all-results"></div>
+
+      <hr style="border:none;border-top:1px solid #222;margin-bottom:24px">
+
+      <!-- ANT+ -->
+      <div>
+        <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">ANT+ skener</div>
+        <p style="color:#888;font-size:15px;margin:0 0 12px">Nájde všetky ANT+ zariadenia v dosahu (HR pásy, FE-C konzoly, kadencia, výkon…). Šliap na bicykli počas skenu aby konzola vysielala.</p>
+        <div class="form-row">
+          <button class="btn btn-primary" id="btn-scan-ant-all" onclick="doScanAntAll()">⦿ ANT+ scan (20s)</button>
+          <div id="scan-ant-all-spinner"><div class="spinner"></div> Skenujem ANT+ zariadenia (20s)…</div>
+        </div>
+        <div id="scan-ant-all-results"></div>
+      </div>
+
     </div>
   </section>
 
