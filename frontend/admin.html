@@ -10,7 +10,8 @@ body{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif;font-size
 a{color:#e03060;text-decoration:none}
 
 /* ── Layout ── */
-#wrap{max-width:1100px;margin:0 auto;padding:24px 20px}
+#wrap{max-width:1400px;margin:0 auto;padding:24px 20px}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid #222;flex-wrap:wrap;gap:10px}
 header h1{font-size:26px;font-weight:700;letter-spacing:.5px}
 header h1 span{color:#e03060}
@@ -209,22 +210,24 @@ input[type=number]{width:100px}
       <span class="sec-arrow">▾</span>
     </div>
     <div class="section-body">
-      <table class="tbl" id="bikes-table">
-        <thead>
-          <tr>
-            <th>Pos.</th>
-            <th>Label</th>
-            <th>Rider</th>
-            <th>BLE / pás</th>
-            <th>ANT+</th>
-            <th>Live</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="bikes-tbody">
-          <tr><td colspan="7" class="empty">Načítavam...</td></tr>
-        </tbody>
-      </table>
+      <div class="tbl-wrap">
+        <table class="tbl" id="bikes-table" style="min-width:860px">
+          <thead>
+            <tr>
+              <th style="width:50px;color:#444">#</th>
+              <th style="width:110px">Label</th>
+              <th>Rider</th>
+              <th>BLE / pás</th>
+              <th style="width:80px">ANT+</th>
+              <th style="width:120px">Live</th>
+              <th style="width:310px"></th>
+            </tr>
+          </thead>
+          <tbody id="bikes-tbody">
+            <tr><td colspan="7" class="empty">Načítavam...</td></tr>
+          </tbody>
+        </table>
+      </div>
       <div style="margin-top:12px">
         <button class="btn btn-secondary" onclick="showAddBike()">+ Pridať bicykel</button>
       </div>
@@ -576,29 +579,30 @@ function renderBikes() {
   }
   tbody.innerHTML = bikes.map(b => `
     <tr>
-      <td><span class="pos-badge">${b.position}</span></td>
-      <td>${b.label}</td>
+      <td style="color:#555;font-size:13px;text-align:center">${b.position}</td>
+      <td><strong style="font-size:17px">${b.label}</strong></td>
       <td>${b.rider
-        ? `<span style="font-size:12px">${b.rider.name}
-             <span style="color:#666;margin-left:4px">${(()=>{const r=b.rider;if(r.birth_date){const[y,m,d]=r.birth_date.split('-').map(Number);const t=new Date();const age=t.getFullYear()-y-((t.getMonth()+1)*100+t.getDate()<m*100+d?1:0);return age+'r';}return r.birth_year?new Date().getFullYear()-r.birth_year+'r':'';})()} ${b.rider.weight_kg ? b.rider.weight_kg+'kg' : ''} max${b.rider.max_hr}</span>
-           </span>`
-        : '<span style="color:#444;font-size:12px">—</span>'}</td>
+        ? `<span style="font-weight:600">${b.rider.name}</span>
+           <span style="color:#666;font-size:13px;margin-left:6px">${(()=>{const r=b.rider;if(r.birth_date){const[y,m,d]=r.birth_date.split('-').map(Number);const t=new Date();const age=t.getFullYear()-y-((t.getMonth()+1)*100+t.getDate()<m*100+d?1:0);return age+'r';}return r.birth_year?new Date().getFullYear()-r.birth_year+'r':'';})()} ${b.rider.weight_kg ? b.rider.weight_kg+'kg' : ''} max${b.rider.max_hr}</span>`
+        : '<span style="color:#444">—</span>'}</td>
       <td>${b.strap
-        ? `<span class="ble-addr">${b.strap.label || b.strap.ble_address || '—'}</span><br><span style="color:#555;font-size:11px">${b.strap.ble_address || '—'}</span>`
+        ? `<span class="ble-addr">${b.strap.label || b.strap.ble_address || '—'}</span><br><span style="color:#555;font-size:13px">${b.strap.ble_address || '—'}</span>`
         : '<span style="color:#444">—</span>'}</td>
       <td>${b.strap?.ant_device_id
-        ? `<span style="color:#7aadff;font-size:12px;font-family:monospace">${b.strap.ant_device_id}</span>`
-        : '<span style="color:#333;font-size:12px">—</span>'}</td>
-      <td data-strap-pos="${b.position}"><span style="color:#333;font-size:12px">—</span></td>
-      <td style="text-align:right;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-small" onclick="editRider(${b.position}, ${JSON.stringify(b.rider||{}).replace(/"/g,'&quot;')})">👤 Rider</button>
-        ${b.rider ? `<button class="btn btn-danger btn-small" onclick="quickRemoveRider(${b.position})">✕ Rider</button>` : ''}
-        ${b.rider ? `<button class="btn btn-small" style="background:${b.hidden ? '#555' : '#1a5fa8'}" onclick="toggleRiderVisibility(${b.position}, ${b.hidden})" title="${b.hidden ? 'Zobraziť na dashboarde' : 'Skryť z dashboardu'}">${b.hidden ? '🙈 Skrytý' : '👁 Vidí'}</button>` : ''}
-        ${b.strap
-          ? `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '${b.strap.ble_address}')">Zmeniť pás</button>
-             <button class="btn btn-danger btn-small" onclick="removeStrap(${b.id})">✕</button>`
-          : `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '')">+ Pás</button>`}
-        <button class="btn btn-danger btn-small" onclick="deleteBike(${b.id}, ${b.position})">Zmazať</button>
+        ? `<span style="color:#7aadff;font-size:14px;font-family:monospace">${b.strap.ant_device_id}</span>`
+        : '<span style="color:#333">—</span>'}</td>
+      <td data-strap-pos="${b.position}"><span style="color:#333;font-size:14px">—</span></td>
+      <td style="white-space:nowrap;text-align:right">
+        <div style="display:inline-flex;gap:5px;align-items:center">
+          <button class="btn btn-secondary btn-small" onclick="editRider(${b.position}, ${JSON.stringify(b.rider||{}).replace(/"/g,'&quot;')})">👤 Rider</button>
+          ${b.rider ? `<button class="btn btn-danger btn-small" onclick="quickRemoveRider(${b.position})" title="Odstrániť rider z bicykla">✕ R</button>` : ''}
+          ${b.rider ? `<button class="btn btn-small" style="background:${b.hidden ? '#555' : '#1a5fa8'};padding:7px 10px" onclick="toggleRiderVisibility(${b.position}, ${b.hidden})" title="${b.hidden ? 'Zobraziť na dashboarde' : 'Skryť z dashboardu'}">${b.hidden ? '🙈' : '👁'}</button>` : ''}
+          ${b.strap
+            ? `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '${b.strap.ble_address}')">Pás</button>
+               <button class="btn btn-danger btn-small" onclick="removeStrap(${b.id})" title="Odpojiť pás">✕ P</button>`
+            : `<button class="btn btn-secondary btn-small" onclick="editStrap(${b.id}, '')">+ Pás</button>`}
+          <button class="btn btn-danger btn-small" onclick="deleteBike(${b.id}, ${b.position})" title="Zmazať bicykel">🗑</button>
+        </div>
       </td>
     </tr>
   `).join('');
