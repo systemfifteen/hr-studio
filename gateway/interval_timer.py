@@ -21,10 +21,10 @@ class IntervalTimer:
 
     # ── Config ────────────────────────────────────────────────────────────────
 
-    def set_config(self, rounds: int, work_min: int, rest_min: int):
-        self.rounds   = max(1, rounds)
-        self.work_min = max(1, work_min)
-        self.rest_min = max(0, rest_min)
+    def set_config(self, rounds: int, work_min: float, rest_min: float):
+        self.rounds   = max(1, int(rounds))
+        self.work_min = max(1/60, float(work_min))   # min. 1 sekunda
+        self.rest_min = max(0,    float(rest_min))
         self.intervals = []
         for _ in range(self.rounds):
             self.intervals.append({

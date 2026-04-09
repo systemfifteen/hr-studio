@@ -363,18 +363,24 @@ input[type=number]{width:100px}
 
         <!-- Config -->
         <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:18px;min-width:300px">
-          <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Konfigurácia</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px">Konfigurácia</div>
+            <div style="display:flex;gap:2px">
+              <button id="t-unit-min" class="btn btn-small" onclick="setTimerUnit('min')" style="padding:4px 10px;font-size:13px;background:#e03060;color:#fff;border-radius:4px 0 0 4px">min</button>
+              <button id="t-unit-sec" class="btn btn-small btn-secondary" onclick="setTimerUnit('sec')" style="padding:4px 10px;font-size:13px;border-radius:0 4px 4px 0">sec</button>
+            </div>
+          </div>
           <div class="form-row" style="align-items:center;gap:10px">
             <label style="width:110px;color:#aaa;font-size:15px">Kolá</label>
             <input type="number" id="t-rounds" value="3" min="1" max="20" style="width:70px" oninput="updateTimerPreview()">
           </div>
           <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
-            <label style="width:110px;color:#aaa;font-size:15px">Záťaž (min)</label>
-            <input type="number" id="t-work" value="25" min="1" max="120" style="width:70px" oninput="updateTimerPreview()">
+            <label id="t-label-work" style="width:110px;color:#aaa;font-size:15px">Záťaž (min)</label>
+            <input type="number" id="t-work" value="25" min="1" max="120" style="width:80px" oninput="updateTimerPreview()">
           </div>
           <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
-            <label style="width:110px;color:#aaa;font-size:15px">Voľno (min)</label>
-            <input type="number" id="t-rest" value="5" min="0" max="60" style="width:70px" oninput="updateTimerPreview()">
+            <label id="t-label-rest" style="width:110px;color:#aaa;font-size:15px">Voľno (min)</label>
+            <input type="number" id="t-rest" value="5" min="0" max="60" style="width:80px" oninput="updateTimerPreview()">
           </div>
           <div id="t-preview" style="margin-top:12px;font-size:14px;color:#888"></div>
           <button class="btn btn-secondary" style="margin-top:14px" onclick="saveTimerConfig()">Uložiť konfig</button>
@@ -1518,17 +1524,66 @@ async function deleteRiderCatalog() {
 
 // ── Interval timer ──────────────────────────────────────────────────────────
 let _timerState = null;
+let _timerUnit  = 'min';  // 'min' | 'sec'
+
+function fmtTimerDur(workMin, restMin) {
+  // Zobrazenie podľa aktuálnej jednotky
+  if (_timerUnit === 'sec') {
+    const ws = Math.round(workMin * 60), rs = Math.round(restMin * 60);
+    return rs > 0 ? `${ws}+${rs}` : `${ws}`;
+  }
+  // min — zobraz ako desatinné číslo ak treba
+  const wStr = Number.isInteger(workMin) ? workMin : workMin.toFixed(1);
+  const rStr = Number.isInteger(restMin) ? restMin : restMin.toFixed(1);
+  return restMin > 0 ? `${wStr}+${rStr}` : `${wStr}`;
+}
+
+function fmtTimerTotal(totalSec) {
+  if (totalSec < 60) return totalSec + ' s';
+  const m = totalSec / 60;
+  return Number.isInteger(m) ? m + ' min' : m.toFixed(1) + ' min';
+}
+
+function setTimerUnit(unit) {
+  const workEl = document.getElementById('t-work');
+  const restEl = document.getElementById('t-rest');
+  const curWork = parseFloat(workEl.value) || 0;
+  const curRest = parseFloat(restEl.value) || 0;
+  if (unit === 'sec' && _timerUnit === 'min') {
+    workEl.value = Math.round(curWork * 60);
+    restEl.value = Math.round(curRest * 60);
+    workEl.min = '1'; workEl.max = '3600';
+    restEl.min = '0'; restEl.max = '3600';
+  } else if (unit === 'min' && _timerUnit === 'sec') {
+    workEl.value = parseFloat((curWork / 60).toFixed(2));
+    restEl.value = parseFloat((curRest / 60).toFixed(2));
+    workEl.min = '0.017'; workEl.max = '120';
+    restEl.min = '0';     restEl.max = '60';
+  }
+  _timerUnit = unit;
+  document.getElementById('t-unit-min').style.cssText = unit === 'min'
+    ? 'padding:4px 10px;font-size:13px;background:#e03060;color:#fff;border-radius:4px 0 0 4px'
+    : 'padding:4px 10px;font-size:13px;border-radius:4px 0 0 4px';
+  document.getElementById('t-unit-sec').style.cssText = unit === 'sec'
+    ? 'padding:4px 10px;font-size:13px;background:#e03060;color:#fff;border-radius:0 4px 4px 0'
+    : 'padding:4px 10px;font-size:13px;border-radius:0 4px 4px 0';
+  document.getElementById('t-label-work').textContent = `Záťaž (${unit})`;
+  document.getElementById('t-label-rest').textContent = `Voľno (${unit})`;
+  updateTimerPreview();
+}
 
 function updateTimerPreview() {
-  const rounds   = parseInt(document.getElementById('t-rounds').value) || 0;
-  const workMin  = parseInt(document.getElementById('t-work').value)   || 0;
-  const restMin  = parseInt(document.getElementById('t-rest').value)   || 0;
-  const total    = rounds * (workMin + restMin);
-  const segments = restMin > 0
-    ? Array.from({length: rounds}, () => `${workMin}+${restMin}`).join(' · ')
-    : Array.from({length: rounds}, () => `${workMin}`).join(' · ');
+  const rounds  = parseInt(document.getElementById('t-rounds').value) || 0;
+  const rawWork = parseFloat(document.getElementById('t-work').value) || 0;
+  const rawRest = parseFloat(document.getElementById('t-rest').value) || 0;
+  // Vždy počítame v sekundách
+  const workSec = _timerUnit === 'sec' ? rawWork : rawWork * 60;
+  const restSec = _timerUnit === 'sec' ? rawRest : rawRest * 60;
+  const totalSec = rounds * (workSec + restSec);
+  const seg = fmtTimerDur(workSec / 60, restSec / 60);
+  const segs = Array.from({length: rounds}, () => seg).join(' · ');
   document.getElementById('t-preview').textContent =
-    `Program: ${segments} min  |  Celkom: ${total} min`;
+    `Program: ${segs} ${_timerUnit}  |  Celkom: ${fmtTimerTotal(totalSec)}`;
 }
 
 function applyAdminTimerState(s) {
@@ -1549,19 +1604,25 @@ function applyAdminTimerState(s) {
     status.textContent = 'Nie je nakonfigurovaný — najprv ulož konfig.';
     return;
   }
+  const dur = fmtTimerDur(s.work_min, s.rest_min);
+  const tot = fmtTimerTotal(s.total_sec);
   if (st === 'idle') {
-    status.textContent = `Pripravený: ${s.rounds}× (${s.work_min}+${s.rest_min}) min — ${s.total_sec / 60} min celkom`;
+    status.textContent = `Pripravený: ${s.rounds}× (${dur}) — ${tot} celkom`;
   } else if (st === 'running') {
-    const elapsed = Math.floor((s.elapsed_at_pause || 0) + (Date.now() / 1000 - (s.start_epoch || 0)));
-    status.innerHTML = `<span style="color:#4caf78">▶ Beží</span> — ${s.rounds}× (${s.work_min}+${s.rest_min}) min`;
+    status.innerHTML = `<span style="color:#4caf78">▶ Beží</span> — ${s.rounds}× (${dur}) — ${tot}`;
   } else {
-    status.innerHTML = `<span style="color:#e0a020">⏸ Pauza</span> — ${s.rounds}× (${s.work_min}+${s.rest_min}) min`;
+    status.innerHTML = `<span style="color:#e0a020">⏸ Pauza</span> — ${s.rounds}× (${dur}) — ${tot}`;
   }
 
-  // Sync form hodnoty
-  document.getElementById('t-rounds').value = s.rounds   || 3;
-  document.getElementById('t-work').value   = s.work_min || 25;
-  document.getElementById('t-rest').value   = s.rest_min || 5;
+  // Sync form hodnoty podľa aktuálnej jednotky
+  document.getElementById('t-rounds').value = s.rounds || 3;
+  if (_timerUnit === 'sec') {
+    document.getElementById('t-work').value = Math.round((s.work_min || 25) * 60);
+    document.getElementById('t-rest').value = Math.round((s.rest_min || 5) * 60);
+  } else {
+    document.getElementById('t-work').value = s.work_min || 25;
+    document.getElementById('t-rest').value = s.rest_min || 5;
+  }
   updateTimerPreview();
 }
 
@@ -1573,10 +1634,13 @@ async function loadTimer() {
 }
 
 async function saveTimerConfig() {
-  const rounds   = parseInt(document.getElementById('t-rounds').value);
-  const work_min = parseInt(document.getElementById('t-work').value);
-  const rest_min = parseInt(document.getElementById('t-rest').value);
-  if (!rounds || !work_min) { toast('Kolá a záťaž sú povinné', 'error'); return; }
+  const rounds  = parseInt(document.getElementById('t-rounds').value);
+  const rawWork = parseFloat(document.getElementById('t-work').value);
+  const rawRest = parseFloat(document.getElementById('t-rest').value);
+  if (!rounds || !rawWork) { toast('Kolá a záťaž sú povinné', 'error'); return; }
+  // Konvertuj na minúty pre API
+  const work_min = _timerUnit === 'sec' ? rawWork / 60 : rawWork;
+  const rest_min = _timerUnit === 'sec' ? rawRest / 60 : rawRest;
   const r = await fetch(`${API}/timer`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},

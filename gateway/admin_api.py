@@ -785,10 +785,10 @@ class AdminApi:
             return 503, {"error": "timer not available"}
         try:
             rounds   = int(data.get("rounds",   3))
-            work_min = int(data.get("work_min", 25))
-            rest_min = int(data.get("rest_min",  5))
+            work_min = float(data.get("work_min", 25))
+            rest_min = float(data.get("rest_min",  5))
         except (TypeError, ValueError):
-            return 400, {"error": "rounds/work_min/rest_min must be integers"}
+            return 400, {"error": "rounds/work_min/rest_min must be numeric"}
         self.timer.set_config(rounds, work_min, rest_min)
         db = self._db()
         self.timer.save_to_db(db)
