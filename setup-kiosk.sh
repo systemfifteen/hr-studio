@@ -66,10 +66,11 @@ cat > "${OPENBOX_DIR}/autostart" <<EOF
 # Aktivuj všetky pripojené displeje (HDMI, DP) — xrandr --auto = zrkadlenie
 xrandr --auto &
 
-# Vypni šetrič obrazovky a DPMS (TV nesmie zhasnúť)
-xset s off &
-xset -dpms &
-xset s noblank &
+# Vypni šetrič obrazovky a DPMS — obrazovka musí byť stále zapnutá
+xset s off
+xset s 0 0
+xset -dpms
+xset s noblank
 
 # Schovaj kurzor myši po 1s nečinnosti
 unclutter -idle 1 -root &
@@ -143,6 +144,21 @@ chown "${KIOSK_USER}:${KIOSK_USER}" "${OPENBOX_DIR}/rc.xml"
 # ── 6. Zakáž Ctrl+Alt+Del reboot ─────────────────────────────────────────────
 systemctl mask ctrl-alt-del.target 2>/dev/null || true
 success "Ctrl+Alt+Del zakázaný"
+
+# ── 7. logind — vypni idle sleep a lid close ──────────────────────────────────
+info "Nastavujem logind (no idle sleep, no lid suspend)..."
+LOGIND_CONF="/etc/systemd/logind.conf"
+grep -q "^IdleAction=" "$LOGIND_CONF" \
+    && sed -i "s/^IdleAction=.*/IdleAction=ignore/" "$LOGIND_CONF" \
+    || echo "IdleAction=ignore" >> "$LOGIND_CONF"
+grep -q "^HandleLidSwitch=" "$LOGIND_CONF" \
+    && sed -i "s/^HandleLidSwitch=.*/HandleLidSwitch=ignore/" "$LOGIND_CONF" \
+    || echo "HandleLidSwitch=ignore" >> "$LOGIND_CONF"
+grep -q "^HandleLidSwitchExternalPower=" "$LOGIND_CONF" \
+    && sed -i "s/^HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/" "$LOGIND_CONF" \
+    || echo "HandleLidSwitchExternalPower=ignore" >> "$LOGIND_CONF"
+systemctl restart systemd-logind
+success "logind: IdleAction=ignore, HandleLidSwitch=ignore"
 
 # ── 7. Výsledok ───────────────────────────────────────────────────────────────
 echo ""
