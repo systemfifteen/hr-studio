@@ -239,6 +239,7 @@ function handleMessage(msg) {
           meps:        saved.meps     ?? 0,
           zoneHistory: saved.zoneHistory || [],
           hidden:      r.hidden ?? saved.hidden ?? false,
+          manualHide:  r.hidden ?? saved.manualHide ?? false,
         };
         // Ak je odpojený a ešte nie je skrytý ani nemá bežiaci timer → spusti
         if (!r.connected && !riders[r.position].hidden && !hideTimers[r.position]) {
@@ -262,12 +263,13 @@ function handleMessage(msg) {
 
     case "hr_update": {
       if (!riders[msg.position]) riders[msg.position] = {};
-      // Zruš prípadný hide timer
+      // Zruš prípadný auto-hide timer
       if (hideTimers[msg.position]) {
         clearTimeout(hideTimers[msg.position]);
         delete hideTimers[msg.position];
       }
       const wasHidden = riders[msg.position].hidden;
+      const isManuallyHidden = riders[msg.position].manualHide === true;
       Object.assign(riders[msg.position], {
         name:      msg.name,
         hr:        msg.hr,
@@ -278,10 +280,10 @@ function handleMessage(msg) {
         watts:     msg.watts,
         battery:   msg.battery,
         connected: true,
-        hidden:    false,
+        hidden:    isManuallyHidden,   // zachovaj manuálne skrytie
       });
       pushZoneHistory(msg.position, msg.zone);
-      if (wasHidden) renderGrid(); else updateCard(msg.position);
+      if (wasHidden && !isManuallyHidden) renderGrid(); else if (!isManuallyHidden) updateCard(msg.position);
       break;
     }
 
@@ -310,6 +312,7 @@ function handleMessage(msg) {
     case "rider_visibility":
       if (riders[msg.position]) {
         riders[msg.position].hidden = msg.hidden;
+        riders[msg.position].manualHide = msg.hidden;
         if (hideTimers[msg.position]) { clearTimeout(hideTimers[msg.position]); delete hideTimers[msg.position]; }
         renderGrid();
       }
