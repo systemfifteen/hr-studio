@@ -340,16 +340,24 @@ function renderGrid() {
   const count = positions.length;
   // Timer zaberá 2×2 = 4 sloty; zabezpeč min. 2 stĺpce
   const effective = count + (hasTimer ? 4 : 0);
-  const cols = Math.max(
-    hasTimer ? 2 : 1,
-    effective <= 1 ? 1 : effective <= 4 ? 2 : effective <= 9 ? 3 : effective <= 16 ? 4 : 5
-  );
-  const rows = Math.ceil(effective / cols);
 
   const grid = document.getElementById("grid");
   const GAP = 8, PAD = 10;
   const availW = grid.clientWidth  - PAD * 2;
   const availH = grid.clientHeight - PAD * 2;
+
+  // Nájdi počet stĺpcov ktorý maximalizuje veľkosť bunky pre danú obrazovku
+  const minCols = hasTimer ? 2 : 1;
+  let cols = minCols;
+  let bestCell = 0;
+  for (let c = minCols; c <= Math.max(effective, minCols); c++) {
+    const r = Math.ceil(effective / c) || 1;
+    const cw = (availW - GAP * (c - 1)) / c;
+    const ch = (availH - GAP * (r - 1)) / r;
+    const cellSize = Math.min(cw, ch);
+    if (cellSize > bestCell) { bestCell = cellSize; cols = c; }
+  }
+  const rows   = Math.ceil(effective / cols) || 1;
   const cellW  = (availW - GAP * (cols - 1)) / cols;
   const cellH  = (availH - GAP * (rows - 1)) / rows;
   const cell   = Math.floor(Math.min(cellW, cellH));

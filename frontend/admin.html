@@ -6,67 +6,74 @@
 <title>HR Studio — Admin</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif;font-size:16px}
+body{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif;font-size:19px}
 a{color:#e03060;text-decoration:none}
 
 /* ── Layout ── */
-#wrap{max-width:1040px;margin:0 auto;padding:24px 20px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid #222}
-header h1{font-size:22px;font-weight:700;letter-spacing:.5px}
+#wrap{max-width:1100px;margin:0 auto;padding:24px 20px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid #222;flex-wrap:wrap;gap:10px}
+header h1{font-size:26px;font-weight:700;letter-spacing:.5px}
 header h1 span{color:#e03060}
-header a{font-size:14px;color:#888}
+header a{font-size:17px;color:#888}
 header a:hover{color:#ccc}
 
 /* ── Status bar ── */
 #statusbar{background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:14px 18px;margin-bottom:24px;display:flex;gap:28px;align-items:center;flex-wrap:wrap}
 .sitem{display:flex;flex-direction:column;gap:3px}
-.sitem .slabel{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px}
-.sitem .sval{font-size:15px;font-weight:600}
-.badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:700;text-transform:uppercase}
+.sitem .slabel{font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.sitem .sval{font-size:18px;font-weight:600}
+.badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:13px;font-weight:700;text-transform:uppercase}
 .badge.ok{background:#1a4a28;color:#4caf78}
 .badge.err{background:#4a1a1a;color:#e06060}
 .badge.warn{background:#3a3010;color:#c8a020}
 
 /* ── Buttons ── */
-.btn{padding:10px 18px;border-radius:6px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:background .15s;min-height:40px}
+.btn{padding:11px 20px;border-radius:6px;border:none;cursor:pointer;font-size:17px;font-weight:600;transition:background .15s;min-height:44px}
 .btn-primary{background:#e03060;color:#fff}.btn-primary:hover{background:#c8254f}
 .btn-secondary{background:#222;color:#ccc;border:1px solid #333}.btn-secondary:hover{background:#2a2a2a}
 .btn-danger{background:#3a1010;color:#e06060;border:1px solid #5a2020}.btn-danger:hover{background:#4a1818}
-.btn-small{padding:6px 12px;font-size:13px;min-height:34px}
+.btn-small{padding:7px 14px;font-size:15px;min-height:38px}
 .btn:disabled{opacity:.4;cursor:default}
 
-/* ── Sections ── */
-section{margin-bottom:32px}
-section h2{font-size:17px;font-weight:700;color:#ccc;margin-bottom:14px;display:flex;align-items:center;gap:10px}
-section h2 .badge{font-size:12px}
+/* ── Collapsible sections ── */
+section{margin-bottom:28px;background:#111;border:1px solid #1e1e1e;border-radius:10px;overflow:hidden}
+.sec-hdr{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;border-bottom:1px solid #1e1e1e;background:#151515}
+.sec-hdr:hover{background:#1a1a1a}
+.sec-hdr h2{font-size:20px;font-weight:700;color:#ccc;margin:0;display:flex;align-items:center;gap:10px;flex:1}
+.sec-hdr h2 .badge{font-size:13px}
+.sec-arrow{color:#555;font-size:15px;transition:transform .2s;margin-left:auto;flex-shrink:0}
+.section-body{padding:18px}
+section.collapsed .section-body{display:none}
+section.collapsed .sec-arrow{transform:rotate(-90deg)}
+section.collapsed .sec-hdr{border-bottom:none}
 
 /* ── Table ── */
 .tbl{width:100%;border-collapse:collapse;background:#141414;border-radius:8px;overflow:hidden;border:1px solid #222}
-.tbl th{background:#1c1c1c;color:#888;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:12px 14px;text-align:left;border-bottom:1px solid #222}
-.tbl td{padding:12px 14px;border-bottom:1px solid #1a1a1a;vertical-align:middle}
+.tbl th{background:#1c1c1c;color:#888;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:12px 14px;text-align:left;border-bottom:1px solid #222}
+.tbl td{padding:12px 14px;border-bottom:1px solid #1a1a1a;vertical-align:middle;font-size:15px}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:#181818}
-.ble-addr{font-family:monospace;font-size:13px;color:#7ecfff}
-.pos-badge{display:inline-block;background:#222;border:1px solid #333;border-radius:4px;padding:4px 10px;font-weight:700;font-size:14px;min-width:36px;text-align:center}
-.connected-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px}
+.ble-addr{font-family:monospace;font-size:14px;color:#7ecfff}
+.pos-badge{display:inline-block;background:#222;border:1px solid #333;border-radius:4px;padding:5px 12px;font-weight:700;font-size:16px;min-width:40px;text-align:center}
+.connected-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px}
 .dot-on{background:#4caf78}.dot-off{background:#555}
 
 /* ── Forms ── */
 .form-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-.form-row label{color:#888;font-size:14px;min-width:90px}
-input[type=text],input[type=number],select{background:#1c1c1c;border:1px solid #333;color:#e0e0e0;padding:9px 12px;border-radius:6px;font-size:14px;outline:none;min-height:40px}
+.form-row label{color:#888;font-size:16px;min-width:90px}
+input[type=text],input[type=number],select{background:#1c1c1c;border:1px solid #333;color:#e0e0e0;padding:10px 13px;border-radius:6px;font-size:17px;outline:none;min-height:44px}
 input:focus,select:focus{border-color:#e03060}
 input[type=text]{width:240px}
-input[type=number]{width:90px}
+input[type=number]{width:100px}
 
 /* ── Scan results ── */
 #scan-list{display:grid;gap:8px;margin-top:12px}
-.scan-card{background:#161616;border:1px solid #252525;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:border-color .15s}
+.scan-card{background:#161616;border:1px solid #252525;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:border-color .15s}
 .scan-card:hover{border-color:#e03060}
 .scan-card.selected{border-color:#e03060;background:#1e0a10}
-.scan-card .dev-name{font-weight:700;font-size:15px}
-.scan-card .dev-addr{font-family:monospace;font-size:13px;color:#7ecfff;margin-top:2px}
-.scan-card .dev-rssi{font-size:13px;color:#888}
+.scan-card .dev-name{font-weight:700;font-size:18px}
+.scan-card .dev-addr{font-family:monospace;font-size:14px;color:#7ecfff;margin-top:2px}
+.scan-card .dev-rssi{font-size:15px;color:#888}
 .scan-signal{width:36px;text-align:center}
 .rssi-bar{display:flex;gap:2px;align-items:flex-end;height:16px}
 .rssi-bar span{width:5px;background:#333;border-radius:1px}
@@ -75,24 +82,24 @@ input[type=number]{width:90px}
 /* ── Modal ── */
 #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100}
 #modal-overlay.open{display:flex}
-#modal{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:28px;width:420px;max-width:95vw}
-#modal h3{font-size:18px;margin-bottom:18px}
+#modal{background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:28px;width:440px;max-width:95vw}
+#modal h3{font-size:20px;margin-bottom:18px}
 #modal .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:24px}
 
 /* ── Toast ── */
-#toast{position:fixed;bottom:24px;right:24px;background:#222;border:1px solid #333;color:#e0e0e0;padding:12px 20px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}
+#toast{position:fixed;bottom:24px;right:24px;background:#222;border:1px solid #333;color:#e0e0e0;padding:14px 22px;border-radius:8px;font-size:17px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}
 #toast.show{opacity:1}
 #toast.success{border-color:#4caf78;color:#4caf78}
 #toast.error{border-color:#e06060;color:#e06060}
 
-.empty{color:#555;font-style:italic;padding:16px 14px;font-size:15px}
-#scan-spinner,#scan-ant-all-spinner{display:none;align-items:center;gap:10px;color:#888;font-size:14px}
+.empty{color:#555;font-style:italic;padding:16px 14px;font-size:17px}
+#scan-spinner,#scan-ant-all-spinner{display:none;align-items:center;gap:10px;color:#888;font-size:17px}
 #scan-spinner.active,#scan-ant-all-spinner.active{display:flex}
-.spinner{width:20px;height:20px;border:2px solid #333;border-top-color:#e03060;border-radius:50%;animation:spin .7s linear infinite}
+.spinner{width:22px;height:22px;border:2px solid #333;border-top-color:#e03060;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Catalog label badge ── */
-.catalog-label{display:inline-block;background:#1a3040;border:1px solid #2a5060;color:#7ecfff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700;margin-left:6px;vertical-align:middle}
+.catalog-label{display:inline-block;background:#1a3040;border:1px solid #2a5060;color:#7ecfff;padding:2px 9px;border-radius:10px;font-size:13px;font-weight:700;margin-left:6px;vertical-align:middle}
 
 /* ── Session detail overlay ── */
 #session-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:flex-start;justify-content:center;z-index:150;overflow-y:auto;padding:24px 16px}
@@ -157,217 +164,255 @@ input[type=number]{width:90px}
 
   <!-- Session management -->
   <section>
-    <h2>Tréning <span class="badge" id="session-badge">—</span></h2>
-    <div id="session-active" style="display:none;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-        <div class="sitem">
-          <span class="slabel">Hodina</span>
-          <span class="sval" id="sess-label-val">—</span>
-        </div>
-        <div class="sitem">
-          <span class="slabel">Štart</span>
-          <span class="sval" id="sess-started-val">—</span>
-        </div>
-        <div class="sitem">
-          <span class="slabel">Trvanie</span>
-          <span class="sval" id="sess-duration-val">00:00</span>
-        </div>
-        <button class="btn btn-danger" onclick="stopSession()">■ Ukončiť hodinu</button>
-      </div>
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>Tréning <span class="badge" id="session-badge">—</span></h2>
+      <span class="sec-arrow">▾</span>
     </div>
-    <div id="session-idle">
-      <div class="form-row">
-        <input type="text" id="session-label-input" placeholder="Názov hodiny (voliteľné)" style="width:220px">
-        <select id="session-duration-select" style="width:130px">
-          <option value="60">60 min</option>
-          <option value="90">90 min</option>
-          <option value="120" selected>120 min</option>
-          <option value="180">180 min (maratón)</option>
-          <option value="">bez limitu</option>
-        </select>
-        <button class="btn btn-primary" onclick="startSession()">▶ Štart hodiny</button>
+    <div class="section-body">
+      <div id="session-active" style="display:none;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div class="sitem">
+            <span class="slabel">Hodina</span>
+            <span class="sval" id="sess-label-val">—</span>
+          </div>
+          <div class="sitem">
+            <span class="slabel">Štart</span>
+            <span class="sval" id="sess-started-val">—</span>
+          </div>
+          <div class="sitem">
+            <span class="slabel">Trvanie</span>
+            <span class="sval" id="sess-duration-val">00:00</span>
+          </div>
+          <button class="btn btn-danger" onclick="stopSession()">■ Ukončiť hodinu</button>
+        </div>
+      </div>
+      <div id="session-idle">
+        <div class="form-row">
+          <input type="text" id="session-label-input" placeholder="Názov hodiny (voliteľné)" style="width:220px">
+          <select id="session-duration-select" style="width:140px">
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+            <option value="120" selected>120 min</option>
+            <option value="180">180 min (maratón)</option>
+            <option value="">bez limitu</option>
+          </select>
+          <button class="btn btn-primary" onclick="startSession()">▶ Štart hodiny</button>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- Bikes & straps -->
   <section>
-    <h2>Bicykle a pásy <span class="badge warn" id="bikes-count">0</span></h2>
-    <table class="tbl" id="bikes-table">
-      <thead>
-        <tr>
-          <th>Pos.</th>
-          <th>Label</th>
-          <th>Rider</th>
-          <th>BLE adresa pásu</th>
-          <th>ANT+</th>
-          <th>Live</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="bikes-tbody">
-        <tr><td colspan="7" class="empty">Načítavam...</td></tr>
-      </tbody>
-    </table>
-
-    <div style="margin-top:12px">
-      <button class="btn btn-secondary" onclick="showAddBike()">+ Pridať bicykel</button>
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>Bicykle a pásy <span class="badge warn" id="bikes-count">0</span></h2>
+      <span class="sec-arrow">▾</span>
+    </div>
+    <div class="section-body">
+      <table class="tbl" id="bikes-table">
+        <thead>
+          <tr>
+            <th>Pos.</th>
+            <th>Label</th>
+            <th>Rider</th>
+            <th>BLE / pás</th>
+            <th>ANT+</th>
+            <th>Live</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="bikes-tbody">
+          <tr><td colspan="7" class="empty">Načítavam...</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px">
+        <button class="btn btn-secondary" onclick="showAddBike()">+ Pridať bicykel</button>
+      </div>
     </div>
   </section>
 
   <!-- Strap catalog -->
-  <section>
-    <h2>Katalóg pásov <span class="badge warn" id="catalog-count">0</span></h2>
-    <table class="tbl" id="catalog-table">
-      <thead>
-        <tr>
-          <th>Label</th>
-          <th>BLE Name</th>
-          <th>MAC adresa</th>
-          <th>ANT+ ID</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="catalog-tbody">
-        <tr><td colspan="5" class="empty">Načítavam...</td></tr>
-      </tbody>
-    </table>
-    <div style="margin-top:12px">
-      <div class="form-row">
-        <input type="text" id="cat-label" placeholder="Label (napr. 1)" style="width:100px">
-        <input type="text" id="cat-ble-name" placeholder="BLE Name (napr. MYZONE-…)" style="width:200px">
-        <input type="text" id="cat-ble-addr" placeholder="MAC (napr. D1:6E:D6:44:13:15)" style="width:185px">
-        <input type="number" id="cat-ant-id" placeholder="ANT+ ID" style="width:90px">
-        <button class="btn btn-primary" onclick="addToCatalog()">+ Pridať</button>
+  <section class="collapsed">
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>Katalóg pásov <span class="badge warn" id="catalog-count">0</span></h2>
+      <span class="sec-arrow">▾</span>
+    </div>
+    <div class="section-body">
+      <table class="tbl" id="catalog-table">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>BLE Name</th>
+            <th>MAC adresa</th>
+            <th>ANT+ ID</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="catalog-tbody">
+          <tr><td colspan="5" class="empty">Načítavam...</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:14px">
+        <div style="font-size:14px;color:#666;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Pridať nový pás</div>
+        <div class="form-row">
+          <input type="text" id="cat-label" placeholder="Label (napr. 1)" style="width:100px">
+          <input type="text" id="cat-ble-name" placeholder="BLE Name (napr. MYZONE-…)" style="width:210px">
+          <input type="text" id="cat-ble-addr" placeholder="MAC (napr. D1:6E:D6:44:13:15)" style="width:195px">
+          <input type="number" id="cat-ant-id" placeholder="ANT+ ID" style="width:110px">
+          <button class="btn btn-primary" onclick="addToCatalog()">+ Pridať</button>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- Rider catalog -->
-  <section>
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px">
-      <h2 style="margin:0">Katalóg jazdcov <span class="badge warn" id="rcatalog-count">0</span></h2>
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px">
-        <label style="color:#aaa">Max HR formula:</label>
-        <select id="hr-formula-select" onchange="saveFormula()" style="background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:13px">
-          <option value="hunt">HUNT (211 − 0.64×vek) — odporúčané</option>
+  <section class="collapsed">
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>Katalóg jazdcov <span class="badge warn" id="rcatalog-count">0</span></h2>
+      <div style="display:flex;align-items:center;gap:8px;font-size:15px" onclick="event.stopPropagation()">
+        <label style="color:#aaa">Max HR:</label>
+        <select id="hr-formula-select" onchange="saveFormula()" style="background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:5px 10px;font-size:15px">
+          <option value="hunt">HUNT (211 − 0.64×vek)</option>
           <option value="tanaka">Tanaka / Gulati</option>
           <option value="classic">Classic (220 − vek)</option>
         </select>
       </div>
+      <span class="sec-arrow">▾</span>
     </div>
-    <table class="tbl" id="rcatalog-table">
-      <thead>
-        <tr>
-          <th>Meno</th>
-          <th>Ročník</th>
-          <th>Váha</th>
-          <th>Pohlavie</th>
-          <th>Max HR</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="rcatalog-tbody">
-        <tr><td colspan="6" class="empty">Načítavam...</td></tr>
-      </tbody>
-    </table>
-    <div style="margin-top:12px">
-      <button class="btn btn-secondary" onclick="showAddRiderCatalog()">+ Pridať jazdca</button>
+    <div class="section-body">
+      <table class="tbl" id="rcatalog-table">
+        <thead>
+          <tr>
+            <th>Meno</th>
+            <th>Dátum nar.</th>
+            <th>Váha</th>
+            <th>Pohlavie</th>
+            <th>Max HR</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rcatalog-tbody">
+          <tr><td colspan="6" class="empty">Načítavam...</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px">
+        <button class="btn btn-secondary" onclick="showAddRiderCatalog()">+ Pridať jazdca</button>
+      </div>
     </div>
   </section>
 
   <!-- BLE scanner -->
-  <section>
-    <h2>BLE skener — nájdi pásy</h2>
-    <div class="form-row">
-      <button class="btn btn-primary" id="btn-scan" onclick="doScan()">⦿ Spustiť scan (10s)</button>
-      <div id="scan-spinner"><div class="spinner"></div> Skenujem BLE zariadenia...</div>
+  <section class="collapsed">
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>BLE skener</h2>
+      <span class="sec-arrow">▾</span>
     </div>
-    <div id="scan-list"></div>
-    <div id="assign-row" style="display:none;margin-top:14px">
+    <div class="section-body">
       <div class="form-row">
-        <label>Priradiť k bicyklu:</label>
-        <select id="assign-bike-select"></select>
-        <label>Z katalógu:</label>
-        <select id="assign-catalog-select" onchange="onCatalogSelectChange()">
-          <option value="">— zadaj ručne —</option>
-        </select>
-        <input id="assign-strap-label" type="text" placeholder="Štítok pásu (napr. MZ-001)" style="width:160px">
-        <button class="btn btn-primary" onclick="doAssign()">Priradiť</button>
-        <button class="btn btn-secondary" onclick="cancelAssign()">Zrušiť</button>
+        <button class="btn btn-primary" id="btn-scan" onclick="doScan()">⦿ Spustiť scan (10s)</button>
+        <div id="scan-spinner"><div class="spinner"></div> Skenujem BLE zariadenia...</div>
       </div>
-      <div id="assign-info" style="font-size:12px;color:#888;margin-top:4px"></div>
+      <div id="scan-list"></div>
+      <div id="assign-row" style="display:none;margin-top:14px">
+        <div class="form-row">
+          <label>Bicykel:</label>
+          <select id="assign-bike-select"></select>
+          <label>Z katalógu:</label>
+          <select id="assign-catalog-select" onchange="onCatalogSelectChange()">
+            <option value="">— zadaj ručne —</option>
+          </select>
+          <input id="assign-strap-label" type="text" placeholder="Štítok pásu" style="width:160px">
+          <button class="btn btn-primary" onclick="doAssign()">Priradiť</button>
+          <button class="btn btn-secondary" onclick="cancelAssign()">Zrušiť</button>
+        </div>
+        <div id="assign-info" style="font-size:14px;color:#888;margin-top:4px"></div>
+      </div>
     </div>
   </section>
 
   <!-- ANT+ all-device scanner -->
-  <section>
-    <h2>ANT+ skener — všetky zariadenia</h2>
-    <p style="color:#888;font-size:13px;margin:0 0 10px">Nájde všetky ANT+ zariadenia v dosahu (HR pásy, FE-C konzoly, kadencia, výkon…). Šliap na bicykli počas skenu aby konzola vysielala.</p>
-    <div class="form-row">
-      <button class="btn btn-primary" id="btn-scan-ant-all" onclick="doScanAntAll()">⦿ ANT+ scan (20s)</button>
-      <div id="scan-ant-all-spinner"><div class="spinner"></div> Skenujem ANT+ zariadenia (20s)…</div>
+  <section class="collapsed">
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>ANT+ skener</h2>
+      <span class="sec-arrow">▾</span>
     </div>
-    <div id="scan-ant-all-results"></div>
+    <div class="section-body">
+      <p style="color:#888;font-size:15px;margin:0 0 12px">Nájde všetky ANT+ zariadenia v dosahu (HR pásy, FE-C konzoly, kadencia, výkon…). Šliap na bicykli počas skenu aby konzola vysielala.</p>
+      <div class="form-row">
+        <button class="btn btn-primary" id="btn-scan-ant-all" onclick="doScanAntAll()">⦿ ANT+ scan (20s)</button>
+        <div id="scan-ant-all-spinner"><div class="spinner"></div> Skenujem ANT+ zariadenia (20s)…</div>
+      </div>
+      <div id="scan-ant-all-results"></div>
+    </div>
   </section>
 
   <!-- Interval timer -->
-  <section>
-    <h2>Interval Timer</h2>
-    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+  <section class="collapsed">
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>Interval Timer</h2>
+      <span class="sec-arrow">▾</span>
+    </div>
+    <div class="section-body">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
 
-      <!-- Config -->
-      <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:16px;min-width:280px">
-        <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Konfigurácia</div>
-        <div class="form-row" style="align-items:center;gap:10px">
-          <label style="width:90px;color:#aaa;font-size:13px">Kolá</label>
-          <input type="number" id="t-rounds" value="3" min="1" max="20" style="width:60px" oninput="updateTimerPreview()">
+        <!-- Config -->
+        <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:18px;min-width:300px">
+          <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Konfigurácia</div>
+          <div class="form-row" style="align-items:center;gap:10px">
+            <label style="width:110px;color:#aaa;font-size:15px">Kolá</label>
+            <input type="number" id="t-rounds" value="3" min="1" max="20" style="width:70px" oninput="updateTimerPreview()">
+          </div>
+          <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
+            <label style="width:110px;color:#aaa;font-size:15px">Záťaž (min)</label>
+            <input type="number" id="t-work" value="25" min="1" max="120" style="width:70px" oninput="updateTimerPreview()">
+          </div>
+          <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
+            <label style="width:110px;color:#aaa;font-size:15px">Voľno (min)</label>
+            <input type="number" id="t-rest" value="5" min="0" max="60" style="width:70px" oninput="updateTimerPreview()">
+          </div>
+          <div id="t-preview" style="margin-top:12px;font-size:14px;color:#888"></div>
+          <button class="btn btn-secondary" style="margin-top:14px" onclick="saveTimerConfig()">Uložiť konfig</button>
         </div>
-        <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
-          <label style="width:90px;color:#aaa;font-size:13px">Záťaž (min)</label>
-          <input type="number" id="t-work" value="25" min="1" max="120" style="width:60px" oninput="updateTimerPreview()">
+
+        <!-- Controls -->
+        <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:18px;min-width:220px">
+          <div style="font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Ovládanie</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary"   id="t-btn-start"  onclick="ctrlTimer('start')"  style="display:none">▶ Štart</button>
+            <button class="btn btn-secondary" id="t-btn-pause"  onclick="ctrlTimer('pause')"  style="display:none">⏸ Pauza</button>
+            <button class="btn btn-secondary" id="t-btn-resume" onclick="ctrlTimer('resume')" style="display:none">▶ Pokračovať</button>
+            <button class="btn btn-danger"    id="t-btn-stop"   onclick="ctrlTimer('stop')"   style="display:none">■ Stop</button>
+          </div>
+          <div id="t-status" style="margin-top:12px;font-size:15px;color:#888">Načítavam...</div>
         </div>
-        <div class="form-row" style="align-items:center;gap:10px;margin-top:8px">
-          <label style="width:90px;color:#aaa;font-size:13px">Voľno (min)</label>
-          <input type="number" id="t-rest" value="5" min="0" max="60" style="width:60px" oninput="updateTimerPreview()">
-        </div>
-        <div id="t-preview" style="margin-top:12px;font-size:12px;color:#888"></div>
-        <button class="btn btn-secondary" style="margin-top:12px" onclick="saveTimerConfig()">Uložiť konfig</button>
+
       </div>
-
-      <!-- Controls -->
-      <div style="background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:16px;min-width:200px">
-        <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Ovládanie</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" id="t-btn-start"  onclick="ctrlTimer('start')"  style="display:none">▶ Štart</button>
-          <button class="btn btn-secondary" id="t-btn-pause"  onclick="ctrlTimer('pause')"  style="display:none">⏸ Pauza</button>
-          <button class="btn btn-secondary" id="t-btn-resume" onclick="ctrlTimer('resume')" style="display:none">▶ Pokračovať</button>
-          <button class="btn btn-danger"    id="t-btn-stop"   onclick="ctrlTimer('stop')"   style="display:none">■ Stop</button>
-        </div>
-        <div id="t-status" style="margin-top:12px;font-size:13px;color:#888">Načítavam...</div>
-      </div>
-
     </div>
   </section>
 
   <!-- Sessions history -->
-  <section>
-    <h2>História sessions <span class="badge warn" id="sessions-count">0</span></h2>
-    <table class="tbl" id="sessions-table">
-      <thead>
-        <tr>
-          <th style="width:40px">#</th>
-          <th>Názov</th>
-          <th>Začiatok</th>
-          <th>Koniec</th>
-          <th>Trvanie</th>
-          <th style="text-align:right">Akcie</th>
-        </tr>
-      </thead>
-      <tbody id="sessions-tbody">
-        <tr><td colspan="6" class="empty">Načítavam...</td></tr>
-      </tbody>
-    </table>
+  <section class="collapsed">
+    <div class="sec-hdr" onclick="toggleSection(this)">
+      <h2>História sessions <span class="badge warn" id="sessions-count">0</span></h2>
+      <span class="sec-arrow">▾</span>
+    </div>
+    <div class="section-body">
+      <table class="tbl" id="sessions-table">
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th>Názov</th>
+            <th>Začiatok</th>
+            <th>Koniec</th>
+            <th>Trvanie</th>
+            <th style="text-align:right">Akcie</th>
+          </tr>
+        </thead>
+        <tbody id="sessions-tbody">
+          <tr><td colspan="6" class="empty">Načítavam...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
 </div>
@@ -463,6 +508,11 @@ const API = '/api';
 let bikes = [];
 let catalog = [];
 let selectedDevice = null;
+
+// ── Collapsible sections ────────────────────────────────────────────────────
+function toggleSection(el) {
+  el.closest('section').classList.toggle('collapsed');
+}
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg, type = '') {
