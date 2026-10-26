@@ -1,4 +1,6 @@
 FROM nginx:alpine
+# Bezpečnostné opravy Alpine hneď pri builde (oficiálny nginx:alpine niekedy mešká za Alpine repom)
+RUN apk upgrade --no-cache
 
 COPY index.html   /usr/share/nginx/html/index.html
 COPY dashboard.js /usr/share/nginx/html/dashboard.js
